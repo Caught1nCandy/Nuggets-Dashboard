@@ -1,0 +1,2 @@
+-- Initial schema file
+-- Tables will be added here
