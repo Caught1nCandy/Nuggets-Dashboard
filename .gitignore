@@ -1,3 +1,17 @@
 .git-credentials
 .git-credentials
 admin/_secrets.php
+config/db_secrets.php
+
+# Server-only (do not commit)
+config/
+admin/_secrets.php
+
+# Server-only controls
+server_controls/
+
+# Server-only admin control scripts
+admin/update.php
+admin/apply_schema.php
+admin/apply_schema_safe.php
+admin/update_button.html
