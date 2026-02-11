@@ -15,3 +15,10 @@ admin/update.php
 admin/apply_schema.php
 admin/apply_schema_safe.php
 admin/update_button.html
+
+# Server-only controls (do not commit)
+admin/update.php
+admin/apply_schema_safe.php
+admin/update_button.html
+admin/_secrets.php
+config/
