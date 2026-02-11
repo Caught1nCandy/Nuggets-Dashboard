@@ -22,3 +22,10 @@ admin/apply_schema_safe.php
 admin/update_button.html
 admin/_secrets.php
 config/
+
+# Server-only controls
+admin/update.php
+admin/update_button.html
+admin/apply_schema_safe.php
+admin/_secrets.php
+config/
