@@ -45,7 +45,7 @@ TRUNCATE TABLE staging_workforce;
 -- IMPORTANT: File path must be readable by MariaDB on the PI
 -- Put your CSV at: /var/www/dashboard/sql/data.csv
 -- ===============================
-LOAD DATA INFILE '/var/www/dashboard/sql/data.csv'
+LOAD DATA LOCAL INFILE '/var/www/dashboard/sql/data.csv'
 INTO TABLE staging_workforce
 FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
