@@ -4,8 +4,8 @@
 -- ============================================================
 
 -- Use the same DB name as schema.sql
-CREATE DATABASE IF NOT EXISTS Workforce_Dashboard;
-USE Workforce_Dashboard;
+CREATE DATABASE IF NOT EXISTS dashboard_prod;
+USE dashboard_prod;
 
 -- ============================================================
 -- 0) Create staging table (raw strings for clean ingestion)
