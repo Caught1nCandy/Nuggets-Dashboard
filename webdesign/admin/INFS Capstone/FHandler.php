@@ -7,6 +7,7 @@
 <body>
 <h3> Handler <h3> 
 <?php 
+session_start();
 $un = $_POST['name'] ;  // Captures what is in the post section in Method section
 $ps = $_POST['pswd'] ;  // Captures password in name section 
 $ip = $_POST['ip'] ;
@@ -28,5 +29,6 @@ else {
 
 
 </body>
+
 
 </html>
