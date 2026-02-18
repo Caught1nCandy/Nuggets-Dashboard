@@ -1,9 +1,8 @@
 -- Initial schema file
 -- Tables will be added here
 -- INFS 4050 Database Creation
-CREATE DATABASE IF NOT EXISTS Workforce_Dashboard ;
 
-USE Workforce_Dashboard ;
+USE dashboard_prod ;
 
 CREATE TABLE IF NOT EXISTS `role` (
 	role_id VARCHAR (20) ,
