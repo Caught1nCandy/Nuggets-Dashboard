@@ -1,0 +1,55 @@
+body {
+  text-align: center;
+  font-family: Futura PT Bold, sans-serif;;
+  color: #1a1a1a; 
+  margin: 0;
+  padding: 0;
+  background-image: url('FPimg/GOGD.jpg');
+  background-size: cover; 
+  background-position: center;
+  background-repeat: no-repeat; 
+}
+
+/* ALL HEADER STYLE INFO (title and subtitle) // KEYWORD = HEADER */
+	.header {
+  position: relative; 
+  text-align: center;
+  top: 5px;
+}
+	.header h1 {
+  font-family: Futura PT Bold, sans-serif;
+  font-size: 80px;
+  color: #ffffff;
+  margin-top: 20px;
+  margin-bottom: -25px;
+}
+
+	.header h3 {
+  font-family: Futura PT Bold, sans-serif;
+  font-size: 50px;
+  color: #ffffff;
+}	
+	
+	
+	
+	/* ALL NAVIGATION STYLE BAR INFO // KEYWORD = NAV*/
+	
+/* NAVIGATION BAR */
+.navbar {
+  background-color: #4D148C;
+  overflow: hidden;
+  padding: 15px 0;
+}
+
+.navbar a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  padding: 14px 20px;
+}
+
+.navbar a:hover {
+  background-color: #7532bf;
+}
+
+
