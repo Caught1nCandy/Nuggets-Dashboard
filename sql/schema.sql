@@ -1,7 +1,7 @@
 -- Initial schema file
 -- Tables will be added here
 -- INFS 4050 Database Creation
-
+CREATE DATABASE IF NOT EXISTS dashboard_prod;
 USE dashboard_prod ;
 
 CREATE TABLE IF NOT EXISTS `role` (
