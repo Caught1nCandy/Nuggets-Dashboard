@@ -181,15 +181,39 @@ SELECT
   CAST(NULLIF(TRIM(tenure_raw), '') AS UNSIGNED) AS tenure,
 
   -- Accept YYYY-MM-DD or MM/DD/YYYY
-  COALESCE(
-    STR_TO_DATE(NULLIF(TRIM(anniversary_raw), ''), '%Y-%m-%d'),
-    STR_TO_DATE(NULLIF(TRIM(anniversary_raw), ''), '%m/%d/%Y')
-  ) AS anniversary,
+  CASE
+  WHEN NULLIF(TRIM(anniversary_raw), '') REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    THEN STR_TO_DATE(TRIM(anniversary_raw), '%Y-%m-%d')
 
-  COALESCE(
-    STR_TO_DATE(NULLIF(TRIM(birthday_raw), ''), '%Y-%m-%d'),
-    STR_TO_DATE(NULLIF(TRIM(birthday_raw), ''), '%m/%d/%Y')
-  ) AS birthday,
+  WHEN NULLIF(TRIM(anniversary_raw), '') REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+    THEN STR_TO_DATE(TRIM(anniversary_raw), '%m/%d/%Y')
+
+  WHEN NULLIF(TRIM(anniversary_raw), '') REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
+    THEN STR_TO_DATE(TRIM(anniversary_raw), '%e-%b-%Y')
+
+  WHEN NULLIF(TRIM(anniversary_raw), '') REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
+    THEN STR_TO_DATE(TRIM(anniversary_raw), '%e-%b-%y')
+
+  ELSE NULL
+END AS anniversary,
+
+
+  CASE
+  WHEN NULLIF(TRIM(birthday_raw), '') REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    THEN STR_TO_DATE(TRIM(birthday_raw), '%Y-%m-%d')
+
+  WHEN NULLIF(TRIM(birthday_raw), '') REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+    THEN STR_TO_DATE(TRIM(birthday_raw), '%m/%d/%Y')
+
+  WHEN NULLIF(TRIM(birthday_raw), '') REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
+    THEN STR_TO_DATE(TRIM(birthday_raw), '%e-%b-%Y')
+
+  WHEN NULLIF(TRIM(birthday_raw), '') REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
+    THEN STR_TO_DATE(TRIM(birthday_raw), '%e-%b-%y')
+
+  ELSE NULL
+END AS birthday,
+
 
   NULLIF(TRIM(work_city_raw), '')   AS work_city,
   NULLIF(TRIM(state_raw), '')       AS state,
