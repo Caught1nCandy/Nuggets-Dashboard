@@ -13,8 +13,7 @@
   <a href="Frequest.php">Update Request</a>
 </div>
 
-<img src="fimg/Fdrill.jpg" width="1200">
-<img src="fimg/eedrill.jpg" width="1200">
+<img src="fimg/update.jpg">
 
 
 </body>

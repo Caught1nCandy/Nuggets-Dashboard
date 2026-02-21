@@ -16,7 +16,7 @@
 
 <h3 style="color:white; font-size:50px;"> HR Login </h3>
 
-<form class="login" action="FHandler.php" method="post"> 
+<form class="login" action="FHandler.php" method="post">    
   <input type="text" name="name" placeholder="Username"><br>
   <input type="password" name="pswd" placeholder="Password"><br>
   <input type="hidden" name="ip"> 

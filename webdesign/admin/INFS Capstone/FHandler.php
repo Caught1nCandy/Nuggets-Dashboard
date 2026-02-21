@@ -6,7 +6,7 @@
 
 <body>
 <h3> Handler <h3> 
-<?php 
+<?php
 session_start();
 $un = $_POST['name'] ;  // Captures what is in the post section in Method section
 $ps = $_POST['pswd'] ;  // Captures password in name section 
@@ -16,7 +16,7 @@ echo $ip . "<br>";
 
 // echo $un ;  // inputs as whatever name in your browser or put $ps to display password (soft coding) 
 
-if ($un == "Manager1" && $ps == "Abc123") {
+if ($un == "Manager1" && $ps == "Abc123") { // Double check to see what might be wrong here (before fri meeting) 
     $_SESSION['authorized'] = true;
     header("Location: Fprivhome.php");
     exit();
@@ -29,6 +29,5 @@ else {
 
 
 </body>
-
 
 </html>

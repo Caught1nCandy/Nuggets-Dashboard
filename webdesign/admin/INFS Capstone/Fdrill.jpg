@@ -10,11 +10,10 @@
   <a href="Fmap.php">Maps</a>
   <a href="Fevent.php">Events</a>
   <a href="Fdrill.php">Drill Down</a>
-  <a href="Frequest.php">Update Request</a>
 </div>
 
-<img src="fimg/Fdrill.jpg" width="1200">
-<img src="fimg/eedrill.jpg" width="1200">
+<img src="fimg/Fdrill.jpg">
+<img src="fimg/eedrill.jpg">
 
 
 </body>
