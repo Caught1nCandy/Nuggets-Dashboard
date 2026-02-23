@@ -37,7 +37,7 @@ TRUNCATE TABLE staging_workforce;
 
 -- 1) load CSV (SERVER-SIDE; file must be readable by MariaDB server)
 -- Put the file in secure_file_priv dir (commonly /var/lib/mysql-files/)
-LOAD DATA INFILE '/var/lib/mysql-files/workforce.csv'
+LOAD DATA LOCAL INFILE '/var/www/dashboard/sql/workforce.csv'
 INTO TABLE staging_workforce
 FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
