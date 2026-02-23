@@ -41,7 +41,7 @@ LOAD DATA LOCAL INFILE '/var/www/dashboard/sql/workforce.csv'
 INTO TABLE staging_workforce
 FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
-LINES TERMINATED BY '\n'
+LINES TERMINATED BY '\r\n'
 IGNORE 1 ROWS
 (
   employee_id_raw,
