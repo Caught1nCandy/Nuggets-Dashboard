@@ -41,7 +41,7 @@ LOAD DATA LOCAL INFILE '/var/www/dashboard/sql/workforce.csv'
 INTO TABLE staging_workforce
 FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
-LINES TERMINATED BY '\r\n'
+LINES TERMINATED BY '\n'
 IGNORE 1 ROWS
 (
   employee_id_raw,
@@ -67,7 +67,10 @@ IGNORE 1 ROWS
   vp_id_raw,
   svp_name_raw,
   svp_id_raw
-);
+)
+SET
+  -- this strips CR if the file is CRLF, harmless if LF-only
+  svp_id_raw = TRIM(TRAILING '\r' FROM svp_id_raw);
 
 -- 2) lookups
 INSERT INTO organization (organization_id, organization_name)
