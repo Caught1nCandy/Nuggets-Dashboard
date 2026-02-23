@@ -1,13 +1,12 @@
 -- ============================================================
--- seed.sql (STAGING -> LOOKUPS -> WORKFORCE)
--- Compatible with the new schema.sql above
+-- seed.sql — STAGING -> LOOKUPS -> WORKFORCE (2-pass for self-FKs)
+-- For loopback-x4 schema, CSV includes Role column
+-- Designed for "Apply DB button" execution (server-side)
 -- ============================================================
 
 USE dashboard_prod;
 
--- ============================================================
--- 0) staging table (raw CSV strings)
--- ============================================================
+-- 0) staging (raw)
 CREATE TABLE IF NOT EXISTS staging_workforce (
   employee_id_raw           VARCHAR(50),
   first_name_raw            VARCHAR(255),
@@ -15,6 +14,7 @@ CREATE TABLE IF NOT EXISTS staging_workforce (
   job_code_raw              VARCHAR(50),
   title_raw                 VARCHAR(255),
   job_type_raw              VARCHAR(255),
+  role_raw                  VARCHAR(255),
   pay_band_raw              VARCHAR(255),
   tenure_raw                VARCHAR(50),
   anniversary_raw           VARCHAR(50),
@@ -33,17 +33,11 @@ CREATE TABLE IF NOT EXISTS staging_workforce (
   svp_id_raw                VARCHAR(50)
 ) ENGINE=InnoDB;
 
--- ============================================================
--- 1) Clear staging
--- ============================================================
 TRUNCATE TABLE staging_workforce;
 
--- ============================================================
--- 2) Load CSV into staging
--- If LOCAL fails in your environment, remove LOCAL and ensure
--- MariaDB server can read the file path.
--- ============================================================
-LOAD DATA LOCAL INFILE '/var/www/dashboard/sql/data.csv'
+-- 1) load CSV (SERVER-SIDE; file must be readable by MariaDB server)
+-- Put the file in secure_file_priv dir (commonly /var/lib/mysql-files/)
+LOAD DATA INFILE '/var/lib/mysql-files/workforce.csv'
 INTO TABLE staging_workforce
 FIELDS TERMINATED BY ','
 ENCLOSED BY '"'
@@ -56,6 +50,7 @@ IGNORE 1 ROWS
   job_code_raw,
   title_raw,
   job_type_raw,
+  role_raw,
   pay_band_raw,
   tenure_raw,
   anniversary_raw,
@@ -74,115 +69,50 @@ IGNORE 1 ROWS
   svp_id_raw
 );
 
--- ============================================================
--- Helper pattern used below:
--- "blank id" = NULL if empty OR all zeros
--- ============================================================
-
--- ============================================================
--- 3) Load lookup tables
--- ============================================================
-
--- 3a) organization (stable generated ID from name)
-INSERT INTO `organization` (organization_id, organization_name)
+-- 2) lookups
+INSERT INTO organization (organization_id, organization_name)
 SELECT DISTINCT
-  SUBSTRING(MD5(NULLIF(TRIM(organization_name_raw), '')), 1, 20) AS organization_id,
-  NULLIF(TRIM(organization_name_raw), '') AS organization_name
+  SUBSTRING(MD5(NULLIF(TRIM(organization_name_raw), '')), 1, 20),
+  NULLIF(TRIM(organization_name_raw), '')
 FROM staging_workforce
 WHERE NULLIF(TRIM(organization_name_raw), '') IS NOT NULL
-ON DUPLICATE KEY UPDATE
-  organization_name = VALUES(organization_name);
+ON DUPLICATE KEY UPDATE organization_name = VALUES(organization_name);
 
--- 3b) job
 INSERT INTO job (job_code, job_type)
 SELECT DISTINCT
-  NULLIF(TRIM(job_code_raw), '') AS job_code,
-  NULLIF(TRIM(job_type_raw), '') AS job_type
+  NULLIF(TRIM(job_code_raw), ''),
+  NULLIF(TRIM(job_type_raw), '')
 FROM staging_workforce
 WHERE NULLIF(TRIM(job_code_raw), '') IS NOT NULL
-ON DUPLICATE KEY UPDATE
-  job_type = VALUES(job_type);
+ON DUPLICATE KEY UPDATE job_type = VALUES(job_type);
 
--- 3c) manager
-INSERT INTO manager (manager_id, manager_name)
-SELECT DISTINCT
-  TRIM(manager_id_raw) AS manager_id,
-  NULLIF(TRIM(manager_name_raw), '') AS manager_name
-FROM staging_workforce
-WHERE NULLIF(TRIM(manager_id_raw), '') IS NOT NULL
-  AND TRIM(manager_id_raw) NOT REGEXP '^0+$'
-ON DUPLICATE KEY UPDATE
-  manager_name = VALUES(manager_name);
-
--- 3d) director
-INSERT INTO director (director_id, director_name)
-SELECT DISTINCT
-  TRIM(director_id_raw) AS director_id,
-  NULLIF(TRIM(director_name_raw), '') AS director_name
-FROM staging_workforce
-WHERE NULLIF(TRIM(director_id_raw), '') IS NOT NULL
-  AND TRIM(director_id_raw) NOT REGEXP '^0+$'
-ON DUPLICATE KEY UPDATE
-  director_name = VALUES(director_name);
-
--- 3e) vp
-INSERT INTO vp (vp_id, vp_name)
-SELECT DISTINCT
-  TRIM(vp_id_raw) AS vp_id,
-  NULLIF(TRIM(vp_name_raw), '') AS vp_name
-FROM staging_workforce
-WHERE NULLIF(TRIM(vp_id_raw), '') IS NOT NULL
-  AND TRIM(vp_id_raw) NOT REGEXP '^0+$'
-ON DUPLICATE KEY UPDATE
-  vp_name = VALUES(vp_name);
-
--- 3f) svp
-INSERT INTO svp (svp_id, svp_name)
-SELECT DISTINCT
-  TRIM(svp_id_raw) AS svp_id,
-  NULLIF(TRIM(svp_name_raw), '') AS svp_name
-FROM staging_workforce
-WHERE NULLIF(TRIM(svp_id_raw), '') IS NOT NULL
-  AND TRIM(svp_id_raw) NOT REGEXP '^0+$'
-ON DUPLICATE KEY UPDATE
-  svp_name = VALUES(svp_name);
-
--- ============================================================
--- 4) Upsert workforce (clean + convert)
--- ============================================================
+-- 3) workforce PASS 1 (insert everyone with NULL hierarchy pointers)
+-- This avoids self-FK failures.
 INSERT INTO workforce (
-  employee_id,
-  first_name,
-  last_name,
-  job_code,
-  pay_band,
-  tenure,
-  anniversary,
-  birthday,
-  work_city,
-  state,
-  work_postal,
-  organization_id,
-  manager_id,
-  director_id,
-  vp_id,
-  svp_id
+  employee_id, first_name, last_name,
+  job_code, pay_band, tenure,
+  anniversary, birthday,
+  work_city, state, work_postal,
+  organization_id, role,
+  manager_id, director_id, vp_id, svp_id
 )
 SELECT
   NULLIF(TRIM(employee_id_raw), '') AS employee_id,
-  NULLIF(TRIM(first_name_raw), '')  AS first_name,
-  NULLIF(TRIM(last_name_raw), '')   AS last_name,
+  COALESCE(NULLIF(TRIM(first_name_raw), ''), 'UNKNOWN') AS first_name,
+  COALESCE(NULLIF(TRIM(last_name_raw), ''),  'UNKNOWN') AS last_name,
 
-  NULLIF(TRIM(job_code_raw), '')    AS job_code,
-  NULLIF(TRIM(pay_band_raw), '')    AS pay_band,
+  NULLIF(TRIM(job_code_raw), '') AS job_code,
+  COALESCE(NULLIF(TRIM(pay_band_raw), ''), 'UNKNOWN') AS pay_band,
 
-  CASE
-    WHEN NULLIF(TRIM(tenure_raw), '') IS NULL THEN NULL
-    WHEN TRIM(tenure_raw) REGEXP '^[0-9]+$' THEN CAST(TRIM(tenure_raw) AS UNSIGNED)
-    ELSE NULL
-  END AS tenure,
+  COALESCE(
+    CASE
+      WHEN NULLIF(TRIM(tenure_raw), '') IS NULL THEN NULL
+      WHEN TRIM(tenure_raw) REGEXP '^[0-9]+$' THEN CAST(TRIM(tenure_raw) AS UNSIGNED)
+      ELSE NULL
+    END,
+    0
+  ) AS tenure,
 
-  -- Anniversary date parsing
   CASE
     WHEN NULLIF(TRIM(anniversary_raw), '') IS NULL THEN NULL
     WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
@@ -196,7 +126,6 @@ SELECT
     ELSE NULL
   END AS anniversary,
 
-  -- Birthday date parsing
   CASE
     WHEN NULLIF(TRIM(birthday_raw), '') IS NULL THEN NULL
     WHEN TRIM(birthday_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
@@ -210,74 +139,62 @@ SELECT
     ELSE NULL
   END AS birthday,
 
-  NULLIF(TRIM(work_city_raw), '')   AS work_city,
-  NULLIF(TRIM(state_raw), '')       AS state,
-  NULLIF(TRIM(work_postal_raw), '') AS work_postal,
+  COALESCE(NULLIF(TRIM(work_city_raw), ''), 'UNKNOWN') AS work_city,
+  COALESCE(NULLIF(TRIM(state_raw), ''), 'NA') AS state,
+  COALESCE(NULLIF(TRIM(work_postal_raw), ''), 'UNKNOWN') AS work_postal,
 
   SUBSTRING(MD5(NULLIF(TRIM(organization_name_raw), '')), 1, 20) AS organization_id,
 
-  -- hierarchy ids: empty OR all-zero => NULL
-  CASE
-    WHEN NULLIF(TRIM(manager_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(manager_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(manager_id_raw)
-  END AS manager_id,
+  COALESCE(NULLIF(TRIM(role_raw), ''), 'Employee') AS role,
 
-  CASE
-    WHEN NULLIF(TRIM(director_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(director_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(director_id_raw)
-  END AS director_id,
-
-  CASE
-    WHEN NULLIF(TRIM(vp_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(vp_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(vp_id_raw)
-  END AS vp_id,
-
-  CASE
-    WHEN NULLIF(TRIM(svp_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(svp_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(svp_id_raw)
-  END AS svp_id
-
+  NULL, NULL, NULL, NULL
 FROM staging_workforce
 WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
 ON DUPLICATE KEY UPDATE
-  first_name      = VALUES(first_name),
-  last_name       = VALUES(last_name),
-  job_code        = VALUES(job_code),
-  pay_band        = VALUES(pay_band),
-  tenure          = VALUES(tenure),
-  anniversary     = VALUES(anniversary),
-  birthday        = VALUES(birthday),
-  work_city       = VALUES(work_city),
-  state           = VALUES(state),
-  work_postal     = VALUES(work_postal),
+  first_name = VALUES(first_name),
+  last_name  = VALUES(last_name),
+  job_code   = VALUES(job_code),
+  pay_band   = VALUES(pay_band),
+  tenure     = VALUES(tenure),
+  anniversary = VALUES(anniversary),
+  birthday    = VALUES(birthday),
+  work_city   = VALUES(work_city),
+  state       = VALUES(state),
+  work_postal = VALUES(work_postal),
   organization_id = VALUES(organization_id),
-  manager_id      = VALUES(manager_id),
-  director_id     = VALUES(director_id),
-  vp_id           = VALUES(vp_id),
-  svp_id          = VALUES(svp_id);
+  role = VALUES(role);
 
--- ============================================================
--- 5) Diagnostics (the “what is blank?” answers)
--- ============================================================
+-- 4) workforce PASS 2 (apply hierarchy ids after all employees exist)
+UPDATE workforce w
+JOIN staging_workforce s
+  ON w.employee_id = NULLIF(TRIM(s.employee_id_raw), '')
+SET
+  w.manager_id = CASE
+    WHEN NULLIF(TRIM(s.manager_id_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.manager_id_raw) REGEXP '^0+$' THEN NULL
+    ELSE TRIM(s.manager_id_raw)
+  END,
+  w.director_id = CASE
+    WHEN NULLIF(TRIM(s.director_id_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.director_id_raw) REGEXP '^0+$' THEN NULL
+    ELSE TRIM(s.director_id_raw)
+  END,
+  w.vp_id = CASE
+    WHEN NULLIF(TRIM(s.vp_id_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.vp_id_raw) REGEXP '^0+$' THEN NULL
+    ELSE TRIM(s.vp_id_raw)
+  END,
+  w.svp_id = CASE
+    WHEN NULLIF(TRIM(s.svp_id_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.svp_id_raw) REGEXP '^0+$' THEN NULL
+    ELSE TRIM(s.svp_id_raw)
+  END;
 
--- A) Totally empty CSV rows (blank lines)
-SELECT COUNT(*) AS staging_fully_empty_rows
+-- 5) diagnostics
+SELECT COUNT(*) AS staging_blank_employee_id
 FROM staging_workforce
-WHERE NULLIF(TRIM(employee_id_raw), '') IS NULL
-  AND NULLIF(TRIM(first_name_raw), '') IS NULL
-  AND NULLIF(TRIM(last_name_raw), '') IS NULL
-  AND NULLIF(TRIM(job_code_raw), '') IS NULL
-  AND NULLIF(TRIM(organization_name_raw), '') IS NULL
-  AND NULLIF(TRIM(manager_id_raw), '') IS NULL
-  AND NULLIF(TRIM(director_id_raw), '') IS NULL
-  AND NULLIF(TRIM(vp_id_raw), '') IS NULL
-  AND NULLIF(TRIM(svp_id_raw), '') IS NULL;
+WHERE NULLIF(TRIM(employee_id_raw), '') IS NULL;
 
--- B) Duplicate employee IDs in staging
 SELECT TRIM(employee_id_raw) AS employee_id, COUNT(*) AS cnt
 FROM staging_workforce
 WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
@@ -285,20 +202,19 @@ GROUP BY TRIM(employee_id_raw)
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC, employee_id;
 
--- C) Rows where hierarchy ids are "0 / 00 / 0000" etc (your director issue)
-SELECT employee_id_raw, manager_id_raw, director_id_raw, vp_id_raw, svp_id_raw
-FROM staging_workforce
-WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
-  AND (
-    TRIM(manager_id_raw)  REGEXP '^0+$'
-    OR TRIM(director_id_raw) REGEXP '^0+$'
-    OR TRIM(vp_id_raw)       REGEXP '^0+$'
-    OR TRIM(svp_id_raw)      REGEXP '^0+$'
-  )
-LIMIT 200;
+SELECT
+  (SELECT COUNT(*) FROM staging_workforce) AS staging_rows,
+  (SELECT COUNT(*) FROM workforce) AS workforce_rows;
 
--- D) Workforce rows with NULL hierarchy pointers (top-of-chain)
-SELECT employee_id, first_name, last_name, manager_id, director_id, vp_id, svp_id
-FROM workforce
-WHERE manager_id IS NULL OR director_id IS NULL OR vp_id IS NULL OR svp_id IS NULL
+-- Find any hierarchy pointers that still don't resolve (should be 0)
+SELECT w.employee_id, w.manager_id, w.director_id, w.vp_id, w.svp_id
+FROM workforce w
+LEFT JOIN workforce m ON m.employee_id = w.manager_id
+LEFT JOIN workforce d ON d.employee_id = w.director_id
+LEFT JOIN workforce v ON v.employee_id = w.vp_id
+LEFT JOIN workforce sv ON sv.employee_id = w.svp_id
+WHERE (w.manager_id IS NOT NULL AND m.employee_id IS NULL)
+   OR (w.director_id IS NOT NULL AND d.employee_id IS NULL)
+   OR (w.vp_id IS NOT NULL AND v.employee_id IS NULL)
+   OR (w.svp_id IS NOT NULL AND sv.employee_id IS NULL)
 LIMIT 200;
