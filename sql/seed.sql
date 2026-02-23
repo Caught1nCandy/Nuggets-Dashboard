@@ -228,7 +228,6 @@ ON DUPLICATE KEY UPDATE
   last_name       = VALUES(last_name),
   job_code        = VALUES(job_code),
   title           = VALUES(title),
-  job_type        = VALUES(job_type),
   role            = VALUES(role),
   pay_band        = VALUES(pay_band),
   tenure          = VALUES(tenure),
