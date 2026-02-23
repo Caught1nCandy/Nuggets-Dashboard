@@ -1,36 +1,42 @@
+-- ============================================================
+-- seed.sql — Workforce Dashboard
+-- Pipeline: CSV → staging_workforce → job / organization /
+--           location → workforce → login
+-- ============================================================
 USE dashboard_prod;
 
 -- ============================================================
--- 0) Ensure staging table exists (raw CSV strings)
+-- 0) Staging table (raw CSV strings, no constraints)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS staging_workforce (
-  employee_id_raw           VARCHAR(50),
-  first_name_raw            VARCHAR(255),
-  last_name_raw             VARCHAR(255),
-  job_code_raw              VARCHAR(50),
-  title_raw                 VARCHAR(255),
-  job_type_raw              VARCHAR(255),
-  role_raw                  VARCHAR(50),
-  pay_band_raw              VARCHAR(255),
-  tenure_raw                VARCHAR(50),
-  anniversary_raw           VARCHAR(50),
-  birthday_raw              VARCHAR(50),
-  organization_name_raw     VARCHAR(255),
-  work_city_raw             VARCHAR(255),
-  work_postal_raw           VARCHAR(50),
-  state_raw                 VARCHAR(10),
-  manager_name_raw          VARCHAR(255),
-  manager_id_raw            VARCHAR(50),
-  director_name_raw         VARCHAR(255),
-  director_id_raw           VARCHAR(50),
-  vp_name_raw               VARCHAR(255),
-  vp_id_raw                 VARCHAR(50),
-  svp_name_raw              VARCHAR(255),
-  svp_id_raw                VARCHAR(50)
+  employee_id_raw       VARCHAR(50),
+  first_name_raw        VARCHAR(255),
+  last_name_raw         VARCHAR(255),
+  job_code_raw          VARCHAR(50),
+  title_raw             VARCHAR(255),
+  job_type_raw          VARCHAR(255),
+  role_raw              VARCHAR(50),
+  pay_band_raw          VARCHAR(255),
+  tenure_raw            VARCHAR(50),
+  anniversary_raw       VARCHAR(50),
+  birthday_raw          VARCHAR(50),
+  organization_name_raw VARCHAR(255),
+  work_city_raw         VARCHAR(255),
+  work_postal_raw       VARCHAR(50),
+  state_raw             VARCHAR(10),
+  manager_name_raw      VARCHAR(255),
+  manager_id_raw        VARCHAR(50),
+  director_name_raw     VARCHAR(255),
+  director_id_raw       VARCHAR(50),
+  vp_name_raw           VARCHAR(255),
+  vp_id_raw             VARCHAR(50),
+  svp_name_raw          VARCHAR(255),
+  svp_id_raw            VARCHAR(50)
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- 1) Clear staging and load the cleaned CSV
+-- 1) Load CSV into staging
+--    (LOAD DATA path is already configured — do not change)
 -- ============================================================
 TRUNCATE TABLE staging_workforce;
 
@@ -67,225 +73,281 @@ IGNORE 1 ROWS
 );
 
 -- ============================================================
--- 2) Load lookup tables first (FK-safe)
+-- 2) Populate lookup tables (must come before workforce
+--    so FK references are valid)
 -- ============================================================
 
--- 2a) organization: stable generated ID from name
-INSERT INTO organization (organization_id, organization_name)
+-- 2a) ORGANIZATION
+--     AUTO_INCREMENT INT pk — just insert the name, MySQL
+--     generates the org_id. UNIQUE on organization_name
+--     prevents duplicates on re-run.
+INSERT INTO organization (organization_name)
 SELECT DISTINCT
-  SUBSTRING(MD5(NULLIF(TRIM(organization_name_raw), '')), 1, 20) AS organization_id,
   NULLIF(TRIM(organization_name_raw), '') AS organization_name
 FROM staging_workforce
 WHERE NULLIF(TRIM(organization_name_raw), '') IS NOT NULL
 ON DUPLICATE KEY UPDATE
-  organization_name = VALUES(organization_name);
+  organization_name = VALUES(organization_name);  -- no-op, just avoids error on re-run
 
--- 2b) job
-INSERT INTO job (job_code, job_type)
+-- 2b) LOCATION
+--     Unique constraint on (work_city, state, work_postal)
+--     prevents duplicates. AUTO_INCREMENT generates location_id.
+INSERT INTO location (work_city, state, work_postal)
 SELECT DISTINCT
-  NULLIF(TRIM(job_code_raw), '') AS job_code,
-  NULLIF(TRIM(job_type_raw), '') AS job_type
+  NULLIF(TRIM(work_city_raw),   '') AS work_city,
+  NULLIF(TRIM(state_raw),       '') AS state,
+  NULLIF(TRIM(work_postal_raw), '') AS work_postal
+FROM staging_workforce
+WHERE NULLIF(TRIM(work_city_raw),   '') IS NOT NULL
+  AND NULLIF(TRIM(state_raw),       '') IS NOT NULL
+  AND NULLIF(TRIM(work_postal_raw), '') IS NOT NULL
+ON DUPLICATE KEY UPDATE
+  work_city = VALUES(work_city);  -- no-op on re-run
+
+-- 2c) JOB
+--     title and pay_band live HERE, not on workforce.
+--     One job_code can have exactly one title / job_type / pay_band.
+--     If the CSV has conflicting values for the same job_code
+--     (shouldn't happen, but just in case), last write wins.
+INSERT INTO job (job_code, title, job_type, pay_band)
+SELECT DISTINCT
+  NULLIF(TRIM(job_code_raw),  '') AS job_code,
+  NULLIF(TRIM(title_raw),     '') AS title,
+  NULLIF(TRIM(job_type_raw),  '') AS job_type,
+  NULLIF(TRIM(pay_band_raw),  '') AS pay_band
 FROM staging_workforce
 WHERE NULLIF(TRIM(job_code_raw), '') IS NOT NULL
 ON DUPLICATE KEY UPDATE
-  job_type = VALUES(job_type);
+  title    = VALUES(title),
+  job_type = VALUES(job_type),
+  pay_band = VALUES(pay_band);
 
 -- ============================================================
--- 3) Upsert into WORKFORCE (clean + normalize)
+-- 3) Populate WORKFORCE
+--
+--  Key decisions made here:
+--
+--  a) FK_CHECKS OFF during insert.
+--     The manager_id / director_id / vp_id / svp_id columns
+--     all reference OTHER rows in this same table. If we try
+--     to insert employee A with manager_id = B before B is
+--     inserted, MySQL throws an FK violation. Turning checks
+--     off lets the whole table load first; the FK integrity
+--     check in section 4 then confirms everything resolved.
+--
+--  b) Hierarchy ID cleanup:
+--     - Empty string → NULL
+--     - All-zero strings ("0", "000000") → NULL
+--       (directors/VPs who ARE the top of their chain have
+--        their own ID listed as 0 in the source CSV)
+--     - Whitespace-only → NULL
+--
+--  c) org_id and location_id are resolved via subquery joins
+--     back to the lookup tables we just populated.
+--
+--  d) Dates support four formats found in the CSV:
+--       YYYY-MM-DD | MM/DD/YYYY | D-Mon-YYYY | D-Mon-YY
+--     Plus bare D-Mon (no year) → assumes current year.
 -- ============================================================
 
-/*
-  Helper logic used below:
-  - "blank" ID = NULL if empty OR all zeros (0, 00, 000000)
-  - Dates:
-    Supports:
-      YYYY-MM-DD
-      MM/DD/YYYY
-      D-Mon-YYYY
-      D-Mon-YY
-      D-Mon        (assumes current year)
-*/
+SET FOREIGN_KEY_CHECKS = 0;
 
 INSERT INTO workforce (
   employee_id,
   first_name,
   last_name,
-  job_code,
-  title,
-  role,
-  pay_band,
   tenure,
   anniversary,
   birthday,
-  work_city,
-  state,
-  work_postal,
-  organization_id,
+  role,
+  job_code,
+  org_id,
+  location_id,
   manager_id,
   director_id,
   vp_id,
   svp_id
 )
 SELECT
-  NULLIF(TRIM(employee_id_raw), '') AS employee_id,
 
-  NULLIF(TRIM(first_name_raw), '')  AS first_name,
-  NULLIF(TRIM(last_name_raw), '')   AS last_name,
+  NULLIF(TRIM(s.employee_id_raw), '') AS employee_id,
+  NULLIF(TRIM(s.first_name_raw),  '') AS first_name,
+  NULLIF(TRIM(s.last_name_raw),   '') AS last_name,
 
-  NULLIF(TRIM(job_code_raw), '')    AS job_code,
-  NULLIF(TRIM(title_raw), '')       AS title,
-  NULLIF(TRIM(role_raw), '')        AS role,
-
-  NULLIF(TRIM(pay_band_raw), '')    AS pay_band,
-
+  -- tenure: only accept clean integers
   CASE
-    WHEN NULLIF(TRIM(tenure_raw), '') IS NULL THEN NULL
-    WHEN TRIM(tenure_raw) REGEXP '^[0-9]+$' THEN CAST(TRIM(tenure_raw) AS UNSIGNED)
+    WHEN NULLIF(TRIM(s.tenure_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.tenure_raw) REGEXP '^[0-9]+$' THEN CAST(TRIM(s.tenure_raw) AS UNSIGNED)
     ELSE NULL
   END AS tenure,
 
   -- anniversary
   CASE
-    WHEN NULLIF(TRIM(anniversary_raw), '') IS NULL THEN NULL
-
-    WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-      THEN STR_TO_DATE(TRIM(anniversary_raw), '%Y-%m-%d')
-
-    WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
-      THEN STR_TO_DATE(TRIM(anniversary_raw), '%m/%d/%Y')
-
-    WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
-      THEN STR_TO_DATE(TRIM(anniversary_raw), '%e-%b-%Y')
-
-    WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
-      THEN STR_TO_DATE(TRIM(anniversary_raw), '%e-%b-%y')
-
-    -- like 4-Jun (no year): assume current year
-    WHEN TRIM(anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}$'
-      THEN STR_TO_DATE(CONCAT(TRIM(anniversary_raw), '-', YEAR(CURDATE())), '%e-%b-%Y')
-
+    WHEN NULLIF(TRIM(s.anniversary_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.anniversary_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      THEN STR_TO_DATE(TRIM(s.anniversary_raw), '%Y-%m-%d')
+    WHEN TRIM(s.anniversary_raw) REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+      THEN STR_TO_DATE(TRIM(s.anniversary_raw), '%m/%d/%Y')
+    WHEN TRIM(s.anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
+      THEN STR_TO_DATE(TRIM(s.anniversary_raw), '%e-%b-%Y')
+    WHEN TRIM(s.anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
+      THEN STR_TO_DATE(TRIM(s.anniversary_raw), '%e-%b-%y')
+    WHEN TRIM(s.anniversary_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}$'
+      THEN STR_TO_DATE(CONCAT(TRIM(s.anniversary_raw), '-', YEAR(CURDATE())), '%e-%b-%Y')
     ELSE NULL
   END AS anniversary,
 
   -- birthday
   CASE
-    WHEN NULLIF(TRIM(birthday_raw), '') IS NULL THEN NULL
-
-    WHEN TRIM(birthday_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-      THEN STR_TO_DATE(TRIM(birthday_raw), '%Y-%m-%d')
-
-    WHEN TRIM(birthday_raw) REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
-      THEN STR_TO_DATE(TRIM(birthday_raw), '%m/%d/%Y')
-
-    WHEN TRIM(birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
-      THEN STR_TO_DATE(TRIM(birthday_raw), '%e-%b-%Y')
-
-    WHEN TRIM(birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
-      THEN STR_TO_DATE(TRIM(birthday_raw), '%e-%b-%y')
-
-    -- like 5-Oct (no year): assume current year
-    WHEN TRIM(birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}$'
-      THEN STR_TO_DATE(CONCAT(TRIM(birthday_raw), '-', YEAR(CURDATE())), '%e-%b-%Y')
-
+    WHEN NULLIF(TRIM(s.birthday_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.birthday_raw) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      THEN STR_TO_DATE(TRIM(s.birthday_raw), '%Y-%m-%d')
+    WHEN TRIM(s.birthday_raw) REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+      THEN STR_TO_DATE(TRIM(s.birthday_raw), '%m/%d/%Y')
+    WHEN TRIM(s.birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{4}$'
+      THEN STR_TO_DATE(TRIM(s.birthday_raw), '%e-%b-%Y')
+    WHEN TRIM(s.birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2}$'
+      THEN STR_TO_DATE(TRIM(s.birthday_raw), '%e-%b-%y')
+    WHEN TRIM(s.birthday_raw) REGEXP '^[0-9]{1,2}-[A-Za-z]{3}$'
+      THEN STR_TO_DATE(CONCAT(TRIM(s.birthday_raw), '-', YEAR(CURDATE())), '%e-%b-%Y')
     ELSE NULL
   END AS birthday,
 
-  NULLIF(TRIM(work_city_raw), '')   AS work_city,
-  NULLIF(TRIM(state_raw), '')       AS state,
-  NULLIF(TRIM(work_postal_raw), '') AS work_postal,
+  NULLIF(TRIM(s.role_raw), '') AS role,
 
-  SUBSTRING(MD5(NULLIF(TRIM(organization_name_raw), '')), 1, 20) AS organization_id,
+  NULLIF(TRIM(s.job_code_raw), '') AS job_code,
 
-  -- hierarchy ids: empty OR all-zero => NULL
+  -- org_id: look up the auto-generated INT from the name
+  (SELECT o.org_id
+   FROM organization o
+   WHERE o.organization_name = NULLIF(TRIM(s.organization_name_raw), '')
+   LIMIT 1) AS org_id,
+
+  -- location_id: look up by the three location fields combined
+  (SELECT l.location_id
+   FROM location l
+   WHERE l.work_city   = NULLIF(TRIM(s.work_city_raw),   '')
+     AND l.state       = NULLIF(TRIM(s.state_raw),       '')
+     AND l.work_postal = NULLIF(TRIM(s.work_postal_raw), '')
+   LIMIT 1) AS location_id,
+
+  -- hierarchy IDs — empty, whitespace-only, or all-zero → NULL
+  -- This handles directors/VPs/SVPs who are at the top of their
+  -- chain and have their own ID listed as 0 in the source data.
   CASE
-    WHEN NULLIF(TRIM(manager_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(manager_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(manager_id_raw)
+    WHEN NULLIF(TRIM(s.manager_id_raw),  '') IS NULL THEN NULL
+    WHEN TRIM(s.manager_id_raw)  REGEXP '^0+$'       THEN NULL
+    ELSE TRIM(s.manager_id_raw)
   END AS manager_id,
 
   CASE
-    WHEN NULLIF(TRIM(director_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(director_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(director_id_raw)
+    WHEN NULLIF(TRIM(s.director_id_raw), '') IS NULL THEN NULL
+    WHEN TRIM(s.director_id_raw) REGEXP '^0+$'       THEN NULL
+    ELSE TRIM(s.director_id_raw)
   END AS director_id,
 
   CASE
-    WHEN NULLIF(TRIM(vp_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(vp_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(vp_id_raw)
+    WHEN NULLIF(TRIM(s.vp_id_raw),       '') IS NULL THEN NULL
+    WHEN TRIM(s.vp_id_raw)       REGEXP '^0+$'       THEN NULL
+    ELSE TRIM(s.vp_id_raw)
   END AS vp_id,
 
   CASE
-    WHEN NULLIF(TRIM(svp_id_raw), '') IS NULL THEN NULL
-    WHEN TRIM(svp_id_raw) REGEXP '^0+$' THEN NULL
-    ELSE TRIM(svp_id_raw)
+    WHEN NULLIF(TRIM(s.svp_id_raw),      '') IS NULL THEN NULL
+    WHEN TRIM(s.svp_id_raw)      REGEXP '^0+$'       THEN NULL
+    ELSE TRIM(s.svp_id_raw)
   END AS svp_id
 
-FROM staging_workforce
-WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
+FROM staging_workforce s
+WHERE NULLIF(TRIM(s.employee_id_raw), '') IS NOT NULL
+
 ON DUPLICATE KEY UPDATE
-  first_name      = VALUES(first_name),
-  last_name       = VALUES(last_name),
-  job_code        = VALUES(job_code),
-  title           = VALUES(title),
-  role            = VALUES(role),
-  pay_band        = VALUES(pay_band),
-  tenure          = VALUES(tenure),
-  anniversary     = VALUES(anniversary),
-  birthday        = VALUES(birthday),
-  work_city       = VALUES(work_city),
-  state           = VALUES(state),
-  work_postal     = VALUES(work_postal),
-  organization_id = VALUES(organization_id),
-  manager_id      = VALUES(manager_id),
-  director_id     = VALUES(director_id),
-  vp_id           = VALUES(vp_id),
-  svp_id          = VALUES(svp_id);
+  first_name  = VALUES(first_name),
+  last_name   = VALUES(last_name),
+  tenure      = VALUES(tenure),
+  anniversary = VALUES(anniversary),
+  birthday    = VALUES(birthday),
+  role        = VALUES(role),
+  job_code    = VALUES(job_code),
+  org_id      = VALUES(org_id),
+  location_id = VALUES(location_id),
+  manager_id  = VALUES(manager_id),
+  director_id = VALUES(director_id),
+  vp_id       = VALUES(vp_id),
+  svp_id      = VALUES(svp_id);
+
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================
--- 4) Diagnostics (quick proof everything is sane)
+-- 4) Populate LOGIN
+--    Username  = employee_id (as agreed)
+--    Password  = SHA2 hash of employee_id as a placeholder.
+--                In production your PHP registration flow
+--                should replace this with a proper bcrypt hash
+--                via password_hash().
+-- ============================================================
+INSERT INTO login (username, password, employee_id)
+SELECT
+  employee_id,
+  SHA2(employee_id, 256) AS password,   -- placeholder — replace with bcrypt in PHP
+  employee_id
+FROM workforce
+ON DUPLICATE KEY UPDATE
+  username    = VALUES(username),
+  employee_id = VALUES(employee_id);
+  -- intentionally NOT updating password so existing passwords survive re-seeding
+
+-- ============================================================
+-- 5) Diagnostics
 -- ============================================================
 
--- 4a) counts
+-- 5a) Row counts across all tables
 SELECT
   (SELECT COUNT(*) FROM staging_workforce) AS staging_rows,
-  (SELECT COUNT(*) FROM workforce) AS workforce_rows;
+  (SELECT COUNT(*) FROM organization)      AS org_rows,
+  (SELECT COUNT(*) FROM location)          AS location_rows,
+  (SELECT COUNT(*) FROM job)               AS job_rows,
+  (SELECT COUNT(*) FROM workforce)         AS workforce_rows,
+  (SELECT COUNT(*) FROM login)             AS login_rows;
 
--- 4b) staging duplicate employee IDs (these merge in workforce)
+-- 5b) Any employees whose org or location didn't resolve
+--     (these will show NULL org_id or location_id in workforce)
+SELECT COUNT(*) AS missing_org_id
+FROM workforce
+WHERE org_id IS NULL;
+
+SELECT COUNT(*) AS missing_location_id
+FROM workforce
+WHERE location_id IS NULL;
+
+-- 5c) Unresolved hierarchy pointers (ideally all zero after FK checks back on)
+SELECT COUNT(*) AS unresolved_hierarchy_refs
+FROM workforce w
+LEFT JOIN workforce mgr ON mgr.employee_id = w.manager_id
+LEFT JOIN workforce dir ON dir.employee_id = w.director_id
+LEFT JOIN workforce vp  ON vp.employee_id  = w.vp_id
+LEFT JOIN workforce svp ON svp.employee_id = w.svp_id
+WHERE (w.manager_id  IS NOT NULL AND mgr.employee_id IS NULL)
+   OR (w.director_id IS NOT NULL AND dir.employee_id IS NULL)
+   OR (w.vp_id       IS NOT NULL AND vp.employee_id  IS NULL)
+   OR (w.svp_id      IS NOT NULL AND svp.employee_id IS NULL);
+
+-- 5d) Date parse failures (staging had a value but workforce got NULL)
+SELECT
+  s.employee_id_raw,
+  s.anniversary_raw, w.anniversary,
+  s.birthday_raw,    w.birthday
+FROM staging_workforce s
+JOIN workforce w ON w.employee_id = TRIM(s.employee_id_raw)
+WHERE (NULLIF(TRIM(s.anniversary_raw), '') IS NOT NULL AND w.anniversary IS NULL)
+   OR (NULLIF(TRIM(s.birthday_raw),    '') IS NOT NULL AND w.birthday    IS NULL)
+LIMIT 50;
+
+-- 5e) Duplicate employee IDs in staging (merged by ON DUPLICATE KEY UPDATE)
 SELECT TRIM(employee_id_raw) AS employee_id, COUNT(*) AS cnt
 FROM staging_workforce
 WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
 GROUP BY TRIM(employee_id_raw)
 HAVING COUNT(*) > 1
-ORDER BY cnt DESC, employee_id;
-
--- 4c) rows where staging had "0" hierarchy values
-SELECT COUNT(*) AS staging_zeroish_hierarchy_rows
-FROM staging_workforce
-WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
-  AND (
-    TRIM(manager_id_raw)  REGEXP '^0+$'
-    OR TRIM(director_id_raw) REGEXP '^0+$'
-    OR TRIM(vp_id_raw)       REGEXP '^0+$'
-    OR TRIM(svp_id_raw)      REGEXP '^0+$'
-  );
-
--- 4d) unresolved hierarchy pointers (should be 0 if everyone exists in workforce)
-SELECT COUNT(*) AS unresolved_hierarchy_refs
-FROM workforce w
-LEFT JOIN workforce m  ON m.employee_id  = w.manager_id
-LEFT JOIN workforce d  ON d.employee_id  = w.director_id
-LEFT JOIN workforce v  ON v.employee_id  = w.vp_id
-LEFT JOIN workforce sv ON sv.employee_id = w.svp_id
-WHERE (w.manager_id  IS NOT NULL AND m.employee_id  IS NULL)
-   OR (w.director_id IS NOT NULL AND d.employee_id  IS NULL)
-   OR (w.vp_id       IS NOT NULL AND v.employee_id  IS NULL)
-   OR (w.svp_id      IS NOT NULL AND sv.employee_id IS NULL);
-
--- 4e) date parse failures where staging had a value but workforce became NULL
-SELECT s.employee_id_raw, s.anniversary_raw, w.anniversary, s.birthday_raw, w.birthday
-FROM staging_workforce s
-JOIN workforce w ON w.employee_id = TRIM(s.employee_id_raw)
-WHERE (NULLIF(TRIM(s.anniversary_raw), '') IS NOT NULL AND w.anniversary IS NULL)
-   OR (NULLIF(TRIM(s.birthday_raw), '')    IS NOT NULL AND w.birthday    IS NULL)
-LIMIT 50;
+ORDER BY cnt DESC
+LIMIT 20;
