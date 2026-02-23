@@ -112,7 +112,6 @@ INSERT INTO workforce (
   last_name,
   job_code,
   title,
-  job_type,
   role,
   pay_band,
   tenure,
@@ -135,7 +134,6 @@ SELECT
 
   NULLIF(TRIM(job_code_raw), '')    AS job_code,
   NULLIF(TRIM(title_raw), '')       AS title,
-  NULLIF(TRIM(job_type_raw), '')    AS job_type,
   NULLIF(TRIM(role_raw), '')        AS role,
 
   NULLIF(TRIM(pay_band_raw), '')    AS pay_band,
