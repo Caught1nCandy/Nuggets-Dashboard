@@ -2,7 +2,7 @@
 // db_config.php
 // Central database connection — include this in any PHP file that needs DB access
 
-$host     = 'localhost';
+$host     = 'db_prod';
 $dbname   = 'dashboard_prod';
 $username = 'dashboard_user';       // change to your MySQL username
 $password = 'DashDB_2026!';           // change to your MySQL password
