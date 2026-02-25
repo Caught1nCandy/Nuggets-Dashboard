@@ -37,69 +37,79 @@ $total = array_sum($stateData);
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:      #0d0f14;
-      --surface: #13161e;
-      --border:  #1e2330;
-      --accent:  #FF6200;
-      --accent2: #4D148C;
-      --text:    #e8ecf5;
-      --muted:   #5a6278;
+      --purple:  #4D148C;
+      --orange:  #FF6200;
+      --bg:      #f4f4f4;
+      --surface: #ffffff;
+      --border:  #e0e0e0;
+      --text:    #1a1a1a;
+      --muted:   #666666;
     }
 
     html, body {
       height: 100%;
       background: var(--bg);
       color: var(--text);
-      font-family: 'Syne', sans-serif;
+      font-family: 'Open Sans', sans-serif;
     }
 
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 24px 60px;
+      padding: 0 0 60px;
     }
 
-    header {
+    /* Purple top bar matching the FedEx dashboard nav */
+    .page-header {
+      width: 100%;
+      background: var(--purple);
+      padding: 18px 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .page-header h1 {
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .page-header .orange-bar {
+      width: 4px;
+      height: 28px;
+      background: var(--orange);
+      border-radius: 2px;
+    }
+
+    .page-subheader {
       width: 100%;
       max-width: 1100px;
-      margin-bottom: 36px;
+      padding: 0 24px;
+      margin-bottom: 20px;
     }
 
-    .eyebrow {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 10px;
-    }
-
-    h1 {
-      font-size: clamp(26px, 4vw, 44px);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--text) 40%, var(--accent));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .subtitle {
-      margin-top: 8px;
-      font-family: 'DM Mono', monospace;
+    .page-subheader p {
       font-size: 13px;
       color: var(--muted);
+    }
+
+    .page-subheader strong {
+      color: var(--purple);
     }
 
     .dashboard {
       width: 100%;
       max-width: 1100px;
+      padding: 0 24px;
       display: grid;
       grid-template-columns: 1fr 260px;
       gap: 20px;
@@ -109,18 +119,19 @@ $total = array_sum($stateData);
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 28px;
+      border-radius: 10px;
+      padding: 24px;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
 
     .card::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, #4D148C, #FF6200);
+      height: 3px;
+      background: linear-gradient(90deg, var(--purple), var(--orange));
     }
 
     #map-svg {
@@ -130,62 +141,72 @@ $total = array_sum($stateData);
     }
 
     .state-path {
-      stroke: #1a1e2a;
+      stroke: #cccccc;
       stroke-width: 0.8;
       cursor: pointer;
       transition: opacity 0.15s;
     }
 
-    .state-path:hover { opacity: 0.75; }
+    .state-path:hover { opacity: 0.7; }
 
     /* Tooltip */
     #tooltip {
       position: fixed;
-      background: #1e2330;
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-left: 3px solid var(--purple);
+      border-radius: 6px;
       padding: 10px 14px;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.15s;
-      font-family: 'DM Mono', monospace;
       font-size: 12px;
       color: var(--text);
       z-index: 999;
       white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     }
 
     #tooltip .tt-state {
-      font-family: 'Syne', sans-serif;
       font-weight: 700;
       font-size: 14px;
       margin-bottom: 4px;
-      color: var(--accent);
+      color: var(--purple);
+    }
+
+    #tooltip .tt-count {
+      color: var(--orange);
+      font-weight: 600;
     }
 
     /* Sidebar */
     .sidebar-title {
-      font-family: 'DM Mono', monospace;
       font-size: 11px;
-      letter-spacing: 0.15em;
+      font-weight: 700;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--muted);
       margin-bottom: 16px;
     }
 
     .total-count {
-      font-size: 42px;
-      font-weight: 800;
-      color: var(--accent);
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--purple);
       line-height: 1;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .total-label {
-      font-family: 'DM Mono', monospace;
       font-size: 12px;
       color: var(--muted);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 16px;
     }
 
     .state-list {
@@ -198,15 +219,13 @@ $total = array_sum($stateData);
       display: flex;
       align-items: center;
       gap: 10px;
-      cursor: pointer;
     }
 
-    .state-row:hover .bar-fill { opacity: 0.8; }
+    .state-row:hover .bar-fill { opacity: 0.75; }
 
     .state-abbr {
-      font-family: 'DM Mono', monospace;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--text);
       width: 28px;
       flex-shrink: 0;
@@ -215,7 +234,7 @@ $total = array_sum($stateData);
     .bar-track {
       flex: 1;
       height: 6px;
-      background: var(--border);
+      background: #eeeeee;
       border-radius: 99px;
       overflow: hidden;
     }
@@ -223,12 +242,11 @@ $total = array_sum($stateData);
     .bar-fill {
       height: 100%;
       border-radius: 99px;
-      background: linear-gradient(90deg, #4D148C, #FF6200);
+      background: linear-gradient(90deg, var(--purple), var(--orange));
       transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .state-num {
-      font-family: 'DM Mono', monospace;
       font-size: 12px;
       color: var(--muted);
       width: 28px;
@@ -245,7 +263,6 @@ $total = array_sum($stateData);
     }
 
     .legend-label {
-      font-family: 'DM Mono', monospace;
       font-size: 11px;
       color: var(--muted);
     }
@@ -254,21 +271,25 @@ $total = array_sum($stateData);
       flex: 1;
       height: 8px;
       border-radius: 99px;
-      background: linear-gradient(90deg, #4D148C, #7a1fa0, #FF6200);
+      background: linear-gradient(90deg, var(--purple), var(--orange));
     }
 
     @media (max-width: 720px) {
       .dashboard { grid-template-columns: 1fr; }
+      .page-header { padding: 14px 20px; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="eyebrow">Workforce Dashboard</div>
-  <h1>Employee Distribution</h1>
-  <p class="subtitle">Live data from dashboard_prod &mdash; <?= $total ?> employees across <?= count($stateData) ?> states</p>
-</header>
+<div class="page-header">
+  <div class="orange-bar"></div>
+  <h1>Employee Map</h1>
+</div>
+
+<div class="page-subheader">
+  <p>Live data from <strong>dashboard_prod</strong> &mdash; <strong><?= $total ?></strong> employees across <strong><?= count($stateData) ?></strong> states</p>
+</div>
 
 <div class="dashboard">
 
@@ -287,6 +308,7 @@ $total = array_sum($stateData);
     <div class="sidebar-title">By State</div>
     <div class="total-count"><?= $total ?></div>
     <div class="total-label">total employees</div>
+    <div class="divider"></div>
     <div class="state-list" id="state-list"></div>
   </div>
 
@@ -367,7 +389,7 @@ d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(us => {
       tooltip.style.top     = (event.clientY - 10) + 'px';
       tooltip.innerHTML     = `
         <div class="tt-state">${abbr}</div>
-        ${count ? `<div>${count} employee${count !== 1 ? 's' : ''}</div>` : '<div>No employees</div>'}
+        ${count ? `<div><span class="tt-count">${count}</span> employee${count !== 1 ? 's' : ''}</div>` : '<div>No employees</div>'}
       `;
     })
     .on('mouseleave', () => {
