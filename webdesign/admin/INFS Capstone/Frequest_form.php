@@ -75,7 +75,7 @@ textarea {
     </select><br>
 
     <label>Details</label><br>
-	<textarea name="details" rows="4" maxlength="250" required oninput="updateCounter(this)"></textarea>
+	<textarea name="details" rows="4" maxlength="500" required oninput="updateCounter(this)"></textarea>
 	<div id="charCount">0 / 500</div>
 
     <button type="submit">Submit Request</button>
