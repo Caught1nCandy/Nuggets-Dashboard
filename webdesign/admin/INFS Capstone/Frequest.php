@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="FPriv.css"> 
 <style>
 body {
-  background-image: url('Fimg/tarmac.jpg');
+  background-image: url('fimg/tarmac.jpg');
 }
 </style>
 </head>
