@@ -1,10 +1,15 @@
 <html>
 <head>
-<title> Private Home </title>
+<title> Update Request </title>
 <link rel="stylesheet" href="FPriv.css"> 
+<style>
+body {
+  background-image: url('Fimg/tarmac.jpg');
+}
+</style>
 </head>
-<body>
 
+<body>
 <div class="navbar">
   <a href="Fprivhome.php">Employee Search</a>
   <a href="Fmap.php">Maps</a>
@@ -13,7 +18,7 @@
   <a href="Frequest.php">Update Request</a>
 </div>
 
-<img src="fimg/update.jpg">
+<?php include 'Frequest_form.php'; ?>
 
 
 </body>
