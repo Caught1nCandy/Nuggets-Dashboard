@@ -144,15 +144,15 @@ $data = $_SESSION['data_request'];
     <span class="page-title">Request Submitted</span>
     <div class="nav-divider"></div>
     <nav>
-      <a href="Fprivhome.php">Employee Search</a>
-      <a href="Fmap.php">Maps</a>
-      <a href="Fevent.php">Events</a>
+      <a href="employee_search.php">Employee Search</a>
+      <a href="employee_map.php">Maps</a>
+      <a href="events.php">Events</a>
       <a href="Fdrill.php">Drill Down</a>
       <a href="Frequest.php" class="active">Update Request</a>
     </nav>
   </div>
-
-  <div class="box">
+/Fprivhome.php
+  <div class="box">/Fprivhome.php
     <h2>Request Submitted</h2>
     <p><b>Name: </b><?php echo $data['name']; ?></p>
     <p><b>ID: </b><?php echo $data['id']; ?></p>
