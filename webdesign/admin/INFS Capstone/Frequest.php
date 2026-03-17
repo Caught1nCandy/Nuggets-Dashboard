@@ -31,6 +31,7 @@ if (!isset($_SESSION['authorized'])) {
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
+      background-attachment: fixed;
       display: flex;
       flex-direction: column;
       align-items: center;
