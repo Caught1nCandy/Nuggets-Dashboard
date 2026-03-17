@@ -18,7 +18,7 @@ if ($prevMonth < 1) { $prevMonth = 12; $prevYear--; }
 $nextMonth = $month + 1; $nextYear = $year;
 if ($nextMonth > 12) { $nextMonth = 1; $nextYear++; }
 
-$monthName  = date('F', mktime(0, 0, 0, $month, 1, $year));
+$monthName   = date('F', mktime(0, 0, 0, $month, 1, $year));
 $daysInMonth = (int)date('t', mktime(0, 0, 0, $month, 1, $year));
 $firstDow    = (int)date('w', mktime(0, 0, 0, $month, 1, $year)); // 0=Sun
 
@@ -53,7 +53,7 @@ $stmtA->execute([':month' => $month]);
 $anniversaryRows = $stmtA->fetchAll();
 
 // ── Index by day ──────────────────────────────────────────────────────────────
-$birthdays    = []; // day => [ ['first_name'=>..., 'last_name'=>...], ... ]
+$birthdays     = [];
 $anniversaries = [];
 
 foreach ($birthdayRows as $r) {
@@ -89,44 +89,85 @@ foreach ($anniversaryRows as $r) {
       color: var(--text);
       font-family: 'Open Sans', sans-serif;
       min-height: 100vh;
+      margin: 0;
+      padding: 0;
     }
 
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0 0 60px;
+      padding-bottom: 60px;
     }
 
-    /* ── Nav header ── */
-    .page-header {
+    /* ── Combined header + navbar ── */
+    .site-header {
       width: 100%;
-      background: var(--purple);
-      padding: 18px 40px;
+      align-self: stretch;
+      background-color: var(--purple);
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 32px;
+      justify-content: center;
+      padding: 0 24px;
+      gap: 16px;
+      min-height: 56px;
     }
 
-    .page-header h1 {
-      color: #fff;
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    .orange-bar {
+    .site-header .orange-bar {
       width: 4px;
       height: 28px;
       background: var(--orange);
       border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .site-header .page-title {
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'Open Sans', sans-serif;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .site-header .nav-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.25);
+      flex-shrink: 0;
+    }
+
+    .site-header nav {
+      display: flex;
+      align-items: center;
+    }
+
+    .site-header nav a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 14px;
+      font-family: 'Open Sans', sans-serif;
+      font-weight: 600;
+      padding: 18px 16px;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .site-header nav a:hover {
+      background-color: rgba(255,255,255,0.12);
+      color: #ffffff;
+    }
+
+    .site-header nav a.active {
+      color: #ffffff;
+      border-bottom: 3px solid var(--orange);
     }
 
     /* ── Calendar wrapper ── */
     .cal-wrapper {
       width: 100%;
       max-width: 1100px;
-      padding: 0 24px;
+      padding: 32px 24px 0;
     }
 
     /* ── Month nav ── */
@@ -223,10 +264,7 @@ foreach ($anniversaryRows as $r) {
     }
 
     .cal-day:nth-child(7n) { border-right: none; }
-
-    .cal-day.empty {
-      background: #fafafa;
-    }
+    .cal-day.empty { background: #fafafa; }
 
     .cal-day.today .day-num {
       background: var(--orange);
@@ -289,12 +327,8 @@ foreach ($anniversaryRows as $r) {
       border-left: 3px solid var(--orange);
     }
 
-    .event-pill .pill-icon {
-      font-size: 9px;
-      flex-shrink: 0;
-    }
+    .event-pill .pill-icon { font-size: 9px; flex-shrink: 0; }
 
-    /* overflow count badge */
     .more-badge {
       font-size: 10px;
       color: var(--muted);
@@ -305,7 +339,7 @@ foreach ($anniversaryRows as $r) {
 
     .more-badge:hover { color: var(--purple); }
 
-    /* ── Modal overlay ── */
+    /* ── Modal ── */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -368,13 +402,10 @@ foreach ($anniversaryRows as $r) {
       margin-bottom: 8px;
     }
 
-    .modal-section-label.bday { color: var(--purple); }
+    .modal-section-label.bday  { color: var(--purple); }
     .modal-section-label.anniv { color: var(--orange); }
 
-    .modal-list {
-      list-style: none;
-      margin-bottom: 16px;
-    }
+    .modal-list { list-style: none; margin-bottom: 16px; }
 
     .modal-list li {
       padding: 6px 10px;
@@ -383,203 +414,190 @@ foreach ($anniversaryRows as $r) {
       margin-bottom: 4px;
     }
 
-    .modal-list li.bday-item {
-      background: #ede0f8;
-      color: var(--purple);
-    }
-
-    .modal-list li.anniv-item {
-      background: #fff0e6;
-      color: #c44d00;
-    }
+    .modal-list li.bday-item  { background: #ede0f8; color: var(--purple); }
+    .modal-list li.anniv-item { background: #fff0e6; color: #c44d00; }
   </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="page-header">
-  <div class="orange-bar"></div>
-  <h1>Events</h1>
-</div>
-
-<div class="cal-wrapper">
-
-  <!-- Month navigation -->
-  <div class="month-nav">
-    <a class="nav-btn" href="?month=<?= $prevMonth ?>&year=<?= $prevYear ?>">&#8592; <?= date('M', mktime(0,0,0,$prevMonth,1,$prevYear)) ?></a>
-    <h2><?= $monthName . ' ' . $year ?></h2>
-    <a class="nav-btn" href="?month=<?= $nextMonth ?>&year=<?= $nextYear ?>"><?= date('M', mktime(0,0,0,$nextMonth,1,$nextYear)) ?> &#8594;</a>
+  <div class="site-header">
+    <div class="orange-bar"></div>
+    <span class="page-title">Events</span>
+    <div class="nav-divider"></div>
+    <nav>
+      <a href="employee_search.php">Employee Search</a>
+      <a href="employee_map.php">Maps</a>
+      <a href="events.php" class="active">Events</a>
+      <a href="Fdrill.php">Drill Down</a>
+      <a href="Frequest.php">Update Request</a>
+    </nav>
   </div>
 
-  <!-- Legend -->
-  <div class="legend">
-    <div class="legend-item">
-      <div class="legend-dot" style="background:#ede0f8;border-left:3px solid #4D148C;"></div>
-      <span>Birthday</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-dot" style="background:#fff0e6;border-left:3px solid #FF6200;"></div>
-      <span>Work Anniversary</span>
-    </div>
-  </div>
+  <div class="cal-wrapper">
 
-  <!-- Calendar grid -->
-  <div class="cal-grid">
-
-    <!-- Day of week headers -->
-    <div class="cal-dow-row">
-      <?php foreach (['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $d): ?>
-        <div class="cal-dow"><?= $d ?></div>
-      <?php endforeach; ?>
+    <!-- Month navigation -->
+    <div class="month-nav">
+      <a class="nav-btn" href="?month=<?= $prevMonth ?>&year=<?= $prevYear ?>">&#8592; <?= date('M', mktime(0,0,0,$prevMonth,1,$prevYear)) ?></a>
+      <h2><?= $monthName . ' ' . $year ?></h2>
+      <a class="nav-btn" href="?month=<?= $nextMonth ?>&year=<?= $nextYear ?>"><?= date('M', mktime(0,0,0,$nextMonth,1,$nextYear)) ?> &#8594;</a>
     </div>
 
-    <!-- Day cells -->
-    <div class="cal-days">
-
-      <?php
-      // Empty cells before first day
-      for ($i = 0; $i < $firstDow; $i++):
-      ?>
-        <div class="cal-day empty"></div>
-      <?php endfor; ?>
-
-      <?php
-      $today     = (int)date('j');
-      $todayMonth = (int)date('n');
-      $todayYear  = (int)date('Y');
-      $maxVisible = 3; // max pills before "+X more"
-
-      for ($day = 1; $day <= $daysInMonth; $day++):
-        $isToday = ($day === $today && $month === $todayMonth && $year === $todayYear);
-        $bdays   = $birthdays[$day]    ?? [];
-        $annivs  = $anniversaries[$day] ?? [];
-
-        // Build combined list for modal (encoded as JSON for JS)
-        $modalData = json_encode([
-          'day'       => $day,
-          'month'     => $monthName,
-          'birthdays' => $bdays,
-          'anniversaries' => $annivs
-        ]);
-      ?>
-        <div class="cal-day <?= $isToday ? 'today' : '' ?>">
-          <div class="day-num"><?= $day ?></div>
-          <div class="events-area">
-
-            <?php
-            $allEvents = [];
-            foreach ($bdays   as $name) $allEvents[] = ['type'=>'birthday',    'name'=>$name];
-            foreach ($annivs  as $name) $allEvents[] = ['type'=>'anniversary', 'name'=>$name];
-
-            $visible = array_slice($allEvents, 0, $maxVisible);
-            $overflow = count($allEvents) - count($visible);
-
-            foreach ($visible as $ev):
-              $cls   = $ev['type'];
-              $icon  = $cls === 'birthday' ? '🎂' : '🎉';
-              $short = strlen($ev['name']) > 14 ? substr($ev['name'], 0, 13) . '…' : $ev['name'];
-            ?>
-              <div
-                class="event-pill <?= $cls ?>"
-                onclick='openModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
-                title="<?= htmlspecialchars($ev['name']) ?>"
-              >
-                <span class="pill-icon"><?= $icon ?></span>
-                <?= htmlspecialchars($short) ?>
-              </div>
-            <?php endforeach; ?>
-
-            <?php if ($overflow > 0): ?>
-              <div
-                class="more-badge"
-                onclick='openModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
-              >+<?= $overflow ?> more</div>
-            <?php endif; ?>
-
-          </div>
-        </div>
-      <?php endfor; ?>
-
-      <?php
-      // Trailing empty cells to complete last row
-      $total     = $firstDow + $daysInMonth;
-      $remainder = $total % 7;
-      if ($remainder > 0):
-        for ($i = 0; $i < (7 - $remainder); $i++):
-      ?>
-        <div class="cal-day empty"></div>
-      <?php
-        endfor;
-      endif;
-      ?>
-
-    </div><!-- .cal-days -->
-  </div><!-- .cal-grid -->
-
-</div><!-- .cal-wrapper -->
-
-<!-- Modal -->
-<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
-  <div class="modal" id="modal">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title" id="modal-title">Events</div>
-        <div class="modal-date" id="modal-date"></div>
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#ede0f8;border-left:3px solid #4D148C;"></div>
+        <span>Birthday</span>
       </div>
-      <button class="modal-close" onclick="closeModalDirect()">&#215;</button>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#fff0e6;border-left:3px solid #FF6200;"></div>
+        <span>Work Anniversary</span>
+      </div>
     </div>
-    <div id="modal-body"></div>
+
+    <!-- Calendar grid -->
+    <div class="cal-grid">
+
+      <div class="cal-dow-row">
+        <?php foreach (['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $d): ?>
+          <div class="cal-dow"><?= $d ?></div>
+        <?php endforeach; ?>
+      </div>
+
+      <div class="cal-days">
+
+        <?php for ($i = 0; $i < $firstDow; $i++): ?>
+          <div class="cal-day empty"></div>
+        <?php endfor; ?>
+
+        <?php
+        $today      = (int)date('j');
+        $todayMonth = (int)date('n');
+        $todayYear  = (int)date('Y');
+        $maxVisible = 3;
+
+        for ($day = 1; $day <= $daysInMonth; $day++):
+          $isToday = ($day === $today && $month === $todayMonth && $year === $todayYear);
+          $bdays   = $birthdays[$day]     ?? [];
+          $annivs  = $anniversaries[$day] ?? [];
+
+          $modalData = json_encode([
+            'day'           => $day,
+            'month'         => $monthName,
+            'birthdays'     => $bdays,
+            'anniversaries' => $annivs
+          ]);
+        ?>
+          <div class="cal-day <?= $isToday ? 'today' : '' ?>">
+            <div class="day-num"><?= $day ?></div>
+            <div class="events-area">
+
+              <?php
+              $allEvents = [];
+              foreach ($bdays  as $name) $allEvents[] = ['type'=>'birthday',    'name'=>$name];
+              foreach ($annivs as $name) $allEvents[] = ['type'=>'anniversary', 'name'=>$name];
+
+              $visible  = array_slice($allEvents, 0, $maxVisible);
+              $overflow = count($allEvents) - count($visible);
+
+              foreach ($visible as $ev):
+                $cls   = $ev['type'];
+                $icon  = $cls === 'birthday' ? '🎂' : '🎉';
+                $short = strlen($ev['name']) > 14 ? substr($ev['name'], 0, 13) . '…' : $ev['name'];
+              ?>
+                <div
+                  class="event-pill <?= $cls ?>"
+                  onclick='openModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
+                  title="<?= htmlspecialchars($ev['name']) ?>"
+                >
+                  <span class="pill-icon"><?= $icon ?></span>
+                  <?= htmlspecialchars($short) ?>
+                </div>
+              <?php endforeach; ?>
+
+              <?php if ($overflow > 0): ?>
+                <div
+                  class="more-badge"
+                  onclick='openModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
+                >+<?= $overflow ?> more</div>
+              <?php endif; ?>
+
+            </div>
+          </div>
+        <?php endfor; ?>
+
+        <?php
+        $total     = $firstDow + $daysInMonth;
+        $remainder = $total % 7;
+        if ($remainder > 0):
+          for ($i = 0; $i < (7 - $remainder); $i++):
+        ?>
+          <div class="cal-day empty"></div>
+        <?php
+          endfor;
+        endif;
+        ?>
+
+      </div><!-- .cal-days -->
+    </div><!-- .cal-grid -->
+
+  </div><!-- .cal-wrapper -->
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modal-title">Events</div>
+          <div class="modal-date" id="modal-date"></div>
+        </div>
+        <button class="modal-close" onclick="closeModalDirect()">&#215;</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
   </div>
-</div>
 
-<script>
-function openModal(data) {
-  const overlay = document.getElementById('modal-overlay');
-  const title   = document.getElementById('modal-title');
-  const dateEl  = document.getElementById('modal-date');
-  const body    = document.getElementById('modal-body');
+  <script>
+  function openModal(data) {
+    const overlay = document.getElementById('modal-overlay');
+    const title   = document.getElementById('modal-title');
+    const dateEl  = document.getElementById('modal-date');
+    const body    = document.getElementById('modal-body');
 
-  title.textContent = 'Events — ' + data.month + ' ' + data.day;
-  dateEl.textContent = data.birthdays.length + ' birthday(s) · ' + data.anniversaries.length + ' anniversary(ies)';
+    title.textContent  = 'Events — ' + data.month + ' ' + data.day;
+    dateEl.textContent = data.birthdays.length + ' birthday(s) · ' + data.anniversaries.length + ' anniversary(ies)';
 
-  let html = '';
+    let html = '';
 
-  if (data.birthdays.length > 0) {
-    html += '<div class="modal-section-label bday">🎂 Birthdays</div><ul class="modal-list">';
-    data.birthdays.forEach(name => {
-      html += `<li class="bday-item">${name}</li>`;
-    });
-    html += '</ul>';
+    if (data.birthdays.length > 0) {
+      html += '<div class="modal-section-label bday">🎂 Birthdays</div><ul class="modal-list">';
+      data.birthdays.forEach(name => { html += `<li class="bday-item">${name}</li>`; });
+      html += '</ul>';
+    }
+
+    if (data.anniversaries.length > 0) {
+      html += '<div class="modal-section-label anniv">🎉 Work Anniversaries</div><ul class="modal-list">';
+      data.anniversaries.forEach(name => { html += `<li class="anniv-item">${name}</li>`; });
+      html += '</ul>';
+    }
+
+    if (!html) html = '<p style="color:#888;font-size:13px;">No events on this day.</p>';
+
+    body.innerHTML = html;
+    overlay.classList.add('open');
   }
 
-  if (data.anniversaries.length > 0) {
-    html += '<div class="modal-section-label anniv">🎉 Work Anniversaries</div><ul class="modal-list">';
-    data.anniversaries.forEach(name => {
-      html += `<li class="anniv-item">${name}</li>`;
-    });
-    html += '</ul>';
+  function closeModal(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
   }
 
-  if (!html) html = '<p style="color:#888;font-size:13px;">No events on this day.</p>';
-
-  body.innerHTML = html;
-  overlay.classList.add('open');
-}
-
-function closeModal(e) {
-  if (e.target === document.getElementById('modal-overlay')) {
-    closeModalDirect();
+  function closeModalDirect() {
+    document.getElementById('modal-overlay').classList.remove('open');
   }
-}
 
-function closeModalDirect() {
-  document.getElementById('modal-overlay').classList.remove('open');
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModalDirect();
-});
-</script>
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModalDirect();
+  });
+  </script>
 
 </body>
 </html>
