@@ -1,10 +1,13 @@
 <?php
-// employee_search.php
-// Live employee search with filters — pulls from DB via search_api.php
+session_start();
+if (!isset($_SESSION['authorized'])) {
+    session_destroy();
+    header("Location: FEDEXHR.php");
+    exit();
+}
 
 require_once __DIR__ . '/db_config.php';
 
-// Load filter dropdown options from DB
 $locations = $pdo->query("
     SELECT DISTINCT work_city, state
     FROM location
@@ -23,6 +26,7 @@ $orgs = $pdo->query("
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Employee Search — Workforce Dashboard</title>
+  <link rel="stylesheet" href="FPriv.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
 
@@ -43,45 +47,28 @@ $orgs = $pdo->query("
       color: var(--text);
       font-family: 'Open Sans', sans-serif;
       min-height: 100vh;
+      margin: 0;
+      padding: 0;
     }
 
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0 0 60px;
+      padding-bottom: 60px;
     }
 
-    /* ── Header ── */
-    .page-header {
-      width: 100%;
-      background: var(--purple);
-      padding: 18px 40px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 32px;
-    }
-
-    .page-header h1 {
-      color: #fff;
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    .orange-bar {
-      width: 4px;
-      height: 28px;
-      background: var(--orange);
-      border-radius: 2px;
-      flex-shrink: 0;
+    /* Force navbar to always be full width regardless of flex centering */
+    .navbar {
+      width: 100% !important;
+      align-self: stretch;
     }
 
     /* ── Main layout ── */
     .search-wrapper {
       width: 100%;
       max-width: 1000px;
-      padding: 0 24px;
+      padding: 32px 24px 0;
     }
 
     /* ── Search bar row ── */
@@ -252,7 +239,6 @@ $orgs = $pdo->query("
       box-shadow: 0 3px 12px rgba(77,20,140,0.1);
     }
 
-    /* Role badge / avatar */
     .role-badge {
       width: 40px;
       height: 40px;
@@ -303,9 +289,7 @@ $orgs = $pdo->query("
       text-overflow: ellipsis;
     }
 
-    .result-meta span {
-      margin-right: 12px;
-    }
+    .result-meta span { margin-right: 12px; }
 
     .result-arrow {
       color: var(--purple);
@@ -427,12 +411,6 @@ $orgs = $pdo->query("
       color: var(--text);
     }
 
-    .detail-divider {
-      height: 1px;
-      background: var(--border);
-      margin: 16px 0;
-    }
-
     @media (max-width: 600px) {
       .filters-grid { grid-template-columns: 1fr; }
       .detail-grid  { grid-template-columns: 1fr; }
@@ -441,10 +419,13 @@ $orgs = $pdo->query("
 </head>
 <body>
 
-<!-- Header -->
-<div class="page-header">
-  <div class="orange-bar"></div>
-  <h1>Employee Search</h1>
+<!-- Navbar from FPriv.css — full width -->
+<div class="navbar">
+  <a href="Fprivhome.php">Employee Search</a>
+  <a href="Fmap.php">Maps</a>
+  <a href="Fevent.php">Events</a>
+  <a href="Fdrill.php">Drill Down</a>
+  <a href="Frequest.php">Update Request</a>
 </div>
 
 <div class="search-wrapper">
@@ -547,7 +528,6 @@ const resultsCount = document.getElementById('results-count');
 
 let debounceTimer = null;
 
-// ── Highlight matching text ────────────────────────────────────────────────
 function highlight(text, query) {
   if (!query) return escHtml(text);
   const escaped = escHtml(text);
@@ -565,21 +545,18 @@ function escRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// ── Role badge initials ────────────────────────────────────────────────────
 function roleInitials(role) {
   if (!role) return '?';
   const map = { Employee:'EMP', Manager:'MGR', Director:'DIR', VP:'VP', SVP:'SVP' };
   return map[role] || role.substring(0,3).toUpperCase();
 }
 
-// ── Fetch results ──────────────────────────────────────────────────────────
 function fetchResults() {
   const q        = searchInput.value.trim();
   const location = document.getElementById('filter-location').value;
   const org      = document.getElementById('filter-org').value;
   const tenure   = document.getElementById('filter-tenure').value;
 
-  // Show placeholder if nothing entered
   if (!q && !location && !org && !tenure) {
     resultsList.innerHTML = `
       <div class="state-msg">
@@ -590,7 +567,6 @@ function fetchResults() {
     return;
   }
 
-  // Show loading
   resultsList.innerHTML = `<div class="state-msg">Searching...</div>`;
 
   const params = new URLSearchParams({ q, location, org, tenure });
@@ -603,7 +579,6 @@ function fetchResults() {
     });
 }
 
-// ── Render results ─────────────────────────────────────────────────────────
 function renderResults(data, query) {
   if (data.length === 0) {
     resultsList.innerHTML = `
@@ -643,22 +618,21 @@ function renderResults(data, query) {
   }).join('');
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────
 function openModal(emp) {
-  const role    = emp.role || 'Employee';
+  const role     = emp.role || 'Employee';
   const fullName = emp.first_name + ' ' + emp.last_name;
 
-  document.getElementById('modal-avatar').textContent      = roleInitials(role);
-  document.getElementById('modal-name').textContent        = fullName;
-  document.getElementById('modal-title-role').textContent  = (emp.title || role) + ' · ' + role;
+  document.getElementById('modal-avatar').textContent     = roleInitials(role);
+  document.getElementById('modal-name').textContent       = fullName;
+  document.getElementById('modal-title-role').textContent = (emp.title || role) + ' · ' + role;
 
   const fields = [
-    { label: 'Employee ID',  value: emp.employee_id },
-    { label: 'Pay Band',     value: emp.pay_band || '—' },
-    { label: 'Department',   value: emp.organization_name || '—' },
-    { label: 'Location',     value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
-    { label: 'Tenure',       value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
-    { label: 'Job Type',     value: emp.job_type || '—' },
+    { label: 'Employee ID', value: emp.employee_id },
+    { label: 'Pay Band',    value: emp.pay_band || '—' },
+    { label: 'Department',  value: emp.organization_name || '—' },
+    { label: 'Location',    value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+    { label: 'Tenure',      value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
+    { label: 'Job Type',    value: emp.job_type || '—' },
   ];
 
   document.getElementById('modal-detail-grid').innerHTML = fields.map(f => `
@@ -666,6 +640,8 @@ function openModal(emp) {
       <label>${escHtml(f.label)}</label>
       <span>${escHtml(String(f.value))}</span>
     </div>`).join('');
+
+  document.getElementById('modal-overlay').classList.add('open');
 }
 
 function closeModal(e) {
@@ -680,10 +656,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModalDirect();
 });
 
-// ── Wire up events ─────────────────────────────────────────────────────────
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(fetchResults, 200); // 200ms debounce
+  debounceTimer = setTimeout(fetchResults, 200);
 });
 
 ['filter-location','filter-org','filter-tenure'].forEach(id => {
@@ -696,9 +671,6 @@ function clearFilters() {
   document.getElementById('filter-tenure').value   = '';
   fetchResults();
 }
-
-// Open modal — called from render
-document.getElementById('modal-overlay').addEventListener('click', closeModal);
 </script>
 
 </body>
