@@ -64,6 +64,7 @@ $orgs = $pdo->query("
       background-color: #4D148C;
       display: flex;
       align-items: center;
+      justify-content: center;
       padding: 0 24px;
       gap: 16px;
       min-height: 56px;
