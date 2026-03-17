@@ -18,7 +18,7 @@ echo $ip . "<br>";
 
 if ($un == "Manager1" && $ps == "Abc123") { // Double check to see what might be wrong here (before fri meeting) 
     $_SESSION['authorized'] = true;
-    header("Location: Fprivhome.php");
+    header("Location: employee_search.php");
     exit();
 }
 else {
