@@ -61,6 +61,6 @@ button {
   <a href="Fprivhome.php"> <button>Return to Home</button> </a>
 
 </div>
-<?php unset($_SESSION['request_data']);?>
+<?php unset($_SESSION['data_request']);?>
 </body>
 </html>
