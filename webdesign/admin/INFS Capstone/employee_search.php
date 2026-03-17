@@ -481,9 +481,9 @@ $orgs = $pdo->query("
   <span class="page-title">Employee Search</span>
   <div class="nav-divider"></div>
   <nav>
-    <a href="Fprivhome.php" class="active">Employee Search</a>
-    <a href="Fmap.php">Maps</a>
-    <a href="Fevent.php">Events</a>
+    <a href="employee_search.php" class="active">Employee Search</a>
+    <a href="employee_map.php">Maps</a>
+    <a href="events.php">Events</a>
     <a href="Fdrill.php">Drill Down</a>
     <a href="Frequest.php">Update Request</a>
   </nav>
