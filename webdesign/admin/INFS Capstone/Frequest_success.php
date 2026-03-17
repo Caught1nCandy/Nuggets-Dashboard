@@ -14,7 +14,7 @@ $data = $_SESSION['data_request'];
 <link rel="stylesheet" href="FPriv.css">
 <style>
 body {
-  background-image: url('Fimg/closeup.jpg');
+  background-image: url('fimg/closeup.jpg');
 }
 
 .box {
