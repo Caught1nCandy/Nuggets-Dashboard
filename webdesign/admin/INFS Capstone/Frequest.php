@@ -166,9 +166,9 @@ if (!isset($_SESSION['authorized'])) {
     <span class="page-title">Update Request</span>
     <div class="nav-divider"></div>
     <nav>
-      <a href="Fprivhome.php">Employee Search</a>
-      <a href="Fmap.php">Maps</a>
-      <a href="Fevent.php">Events</a>
+      <a href="employee_search.php">Employee Search</a>
+      <a href="employee_map.php">Maps</a>
+      <a href="events.php">Events</a>
       <a href="Fdrill.php">Drill Down</a>
       <a href="Frequest.php" class="active">Update Request</a>
     </nav>
