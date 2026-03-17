@@ -26,7 +26,6 @@ $orgs = $pdo->query("
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Employee Search — Workforce Dashboard</title>
-  <link rel="stylesheet" href="FPriv.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
 
@@ -58,10 +57,67 @@ $orgs = $pdo->query("
       padding-bottom: 60px;
     }
 
-    /* Force navbar to always be full width regardless of flex centering */
-    .navbar {
-      width: 100% !important;
+    /* ── Combined header + navbar ── */
+    .site-header {
+      width: 100%;
       align-self: stretch;
+      background-color: #4D148C;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+      min-height: 56px;
+    }
+
+    .site-header .orange-bar {
+      width: 4px;
+      height: 28px;
+      background: var(--orange);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .site-header .page-title {
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'Open Sans', sans-serif;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .site-header .nav-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.25);
+      flex-shrink: 0;
+    }
+
+    .site-header nav {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .site-header nav a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 14px;
+      font-family: 'Open Sans', sans-serif;
+      font-weight: 600;
+      padding: 18px 16px;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .site-header nav a:hover {
+      background-color: rgba(255,255,255,0.12);
+      color: #ffffff;
+    }
+
+    .site-header nav a.active {
+      color: #ffffff;
+      border-bottom: 3px solid var(--orange);
     }
 
     /* ── Main layout ── */
@@ -419,13 +475,17 @@ $orgs = $pdo->query("
 </head>
 <body>
 
-<!-- Navbar from FPriv.css — full width -->
-<div class="navbar">
-  <a href="Fprivhome.php">Employee Search</a>
-  <a href="Fmap.php">Maps</a>
-  <a href="Fevent.php">Events</a>
-  <a href="Fdrill.php">Drill Down</a>
-  <a href="Frequest.php">Update Request</a>
+<div class="site-header">
+  <div class="orange-bar"></div>
+  <span class="page-title">Employee Search</span>
+  <div class="nav-divider"></div>
+  <nav>
+    <a href="Fprivhome.php" class="active">Employee Search</a>
+    <a href="Fmap.php">Maps</a>
+    <a href="Fevent.php">Events</a>
+    <a href="Fdrill.php">Drill Down</a>
+    <a href="Frequest.php">Update Request</a>
+  </nav>
 </div>
 
 <div class="search-wrapper">
