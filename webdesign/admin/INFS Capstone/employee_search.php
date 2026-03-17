@@ -1,12 +1,4 @@
 <?php
-session_start();
-if (!isset($_SESSION['authorized'])) {
-    session_destroy();
-    header("Location: FEDEXHR.php");
-    exit();
-}
-?>
-<?php
 // employee_search.php
 // Live employee search with filters — pulls from DB via search_api.php
 
@@ -30,7 +22,6 @@ $orgs = $pdo->query("
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <link rel="stylesheet" href="FPriv.css">
   <title>Employee Search — Workforce Dashboard</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
@@ -451,12 +442,9 @@ $orgs = $pdo->query("
 <body>
 
 <!-- Header -->
-<div class="navbar">
-  <a href="Fprivhome.php">Employee Search</a>
-  <a href="Fmap.php">Maps</a>
-  <a href="Fevent.php">Events</a>
-  <a href="Fdrill.php">Drill Down</a>
-  <a href="Frequest.php">Update Request</a>
+<div class="page-header">
+  <div class="orange-bar"></div>
+  <h1>Employee Search</h1>
 </div>
 
 <div class="search-wrapper">
