@@ -31,7 +31,8 @@ if ($un === '79723646' && $ps === 'sys4dm1n') {
     $_SESSION['role']        = 'sysadmin';
     $_SESSION['first_name']  = 'Sys';
     $_SESSION['last_name']   = 'Admin';
-    header("Location: employee_search.php");
+    $_SESSION['is_sysadmin'] = true;  // persists even during impersonation
+    header("Location: sysadmin_test.php");
     exit();
 }
 
