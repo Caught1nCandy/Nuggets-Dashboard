@@ -1,13 +1,7 @@
 <?php
-// search_api.php
-// Called by employee_search.php via fetch() as user types.
-// Returns JSON array of matching employees scoped to the logged-in role.
-// IMPORTANT: session + role check happens here too — never trust the front-end alone.
-
 session_start();
 header('Content-Type: application/json');
 
-// Block unauthenticated direct calls to this endpoint
 if (!isset($_SESSION['authorized'])) {
     http_response_code(401);
     echo json_encode([]);
@@ -15,8 +9,9 @@ if (!isset($_SESSION['authorized'])) {
 }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/permissions.php';
 
-$myRole = $_SESSION['role'];       // e.g. 'employee', 'manager', 'director', 'vp', 'svp', 'sysadmin'
+$myRole = $_SESSION['role'];
 $myId   = $_SESSION['employee_id'];
 
 $query    = trim($_GET['q']        ?? '');
@@ -29,86 +24,29 @@ if (strlen($query) < 1 && !$location && !$org && !$tenure) {
     exit;
 }
 
-$where  = ['1=1'];
-$params = [];
+// ── Role scope (from permissions.php) ──────────────────────
+$scope  = getScopeClause($myRole, $myId, $pdo);
+$where  = [$scope['sql']];
+$params = $scope['params'];
 
-// ============================================================
-// ROLE-BASED SCOPE
-// This is the server-side enforcement. Even if someone calls
-// this file directly, they only get rows their role allows.
-//
-// view_level is a computed column sent back in JSON:
-//   'full'      — front-end shows all fields
-//   'name_only' — front-end shows name + birthday only
-// ============================================================
+// ── view_level SQL (from permissions.php) ──────────────────
+$p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
 
-$viewLevelSQL = "'full'"; // default for most roles — overridden for manager below
-
-switch ($myRole) {
-
-    case 'sysadmin':
-        // No restriction — sees every row in the database
-        break;
-
-    case 'svp':
-        // Sees everyone whose svp_id points to them, plus themselves
-        $where[] = '(w.svp_id = :scope_id OR w.employee_id = :scope_self)';
-        $params[':scope_id']   = $myId;
-        $params[':scope_self'] = $myId;
-        break;
-
-    case 'vp':
-        // Sees everyone whose vp_id points to them, plus themselves
-        $where[] = '(w.vp_id = :scope_id OR w.employee_id = :scope_self)';
-        $params[':scope_id']   = $myId;
-        $params[':scope_self'] = $myId;
-        break;
-
-    case 'director':
-        // Sees everyone whose director_id points to them, plus themselves
-        $where[] = '(w.director_id = :scope_id OR w.employee_id = :scope_self)';
-        $params[':scope_id']   = $myId;
-        $params[':scope_self'] = $myId;
-        break;
-
-    case 'manager':
-        // Full detail: themselves + their direct reports (manager_id = myId)
-        // Name only:   peer employees under the same director (different manager)
-        $where[] = '(
-            w.employee_id = :scope_self
-            OR w.manager_id = :scope_mgr
-            OR w.director_id = (
-                SELECT director_id FROM workforce WHERE employee_id = :scope_dir_lookup
-            )
-        )';
-        $params[':scope_self']       = $myId;
-        $params[':scope_mgr']        = $myId;
-        $params[':scope_dir_lookup'] = $myId;
-
-        // Compute view_level per row
-        $viewLevelSQL = "
-            CASE
-                WHEN w.employee_id = :vl_self THEN 'full'
-                WHEN w.manager_id  = :vl_mgr  THEN 'full'
-                ELSE 'name_only'
-            END
-        ";
-        $params[':vl_self'] = $myId;
-        $params[':vl_mgr']  = $myId;
-        break;
-
-    case 'employee':
-    default:
-        // Sees only themselves
-        $where[] = 'w.employee_id = :scope_self';
-        $params[':scope_self'] = $myId;
-        break;
+if ($myRole === 'manager' && isset($p['peer_view_fields'])) {
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self THEN 'full'
+            WHEN w.manager_id  = :vl_mgr  THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+    $params[':vl_mgr']  = $myId;
+} else {
+    $viewLevelSQL = "'" . $p['view_fields'] . "'";
 }
 
-// ============================================================
-// SEARCH FILTERS (applied on top of the role scope above)
-// ============================================================
-
+// ── Search filters ──────────────────────────────────────────
 if ($query !== '') {
     $where[]       = "(CONCAT(w.first_name, ' ', w.last_name) LIKE :q
                        OR w.first_name  LIKE :q2
@@ -170,4 +108,3 @@ $stmt = $pdo->prepare("
 
 $stmt->execute($params);
 echo json_encode($stmt->fetchAll());
-?>
