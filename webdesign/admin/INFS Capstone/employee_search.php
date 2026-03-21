@@ -899,7 +899,7 @@ function renderModal(emp, subordinates) {
       { label: 'Tenure',       value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
       { label: 'Anniversary',  value: formatAnniversary(emp.anniversary) },
       { label: 'Birthday',     value: formatBirthday(emp.birthday) },
-      { label: 'Manager',      value: emp.manager_first ? emp.manager_first + ' ' + emp.manager_last : '—' },
+      { label: emp.manager_role ? (emp.manager_role.charAt(0).toUpperCase() + emp.manager_role.slice(1).toLowerCase()) : 'Reports To', value: emp.manager_first ? emp.manager_first + ' ' + emp.manager_last : '—' },
     ];
   }
 
