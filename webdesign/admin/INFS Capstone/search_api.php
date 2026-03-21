@@ -18,8 +18,9 @@ $query    = trim($_GET['q']        ?? '');
 $location = trim($_GET['location'] ?? '');
 $org      = trim($_GET['org']      ?? '');
 $tenure   = trim($_GET['tenure']   ?? '');
+$role     = trim($_GET['role']     ?? '');
 
-if (strlen($query) < 1 && !$location && !$org && !$tenure) {
+if (strlen($query) < 1 && !$location && !$org && !$tenure && !$role) {
     echo json_encode([]);
     exit;
 }
@@ -51,8 +52,7 @@ if ($query !== '') {
     $where[]       = "(CONCAT(w.first_name, ' ', w.last_name) LIKE :q
                        OR w.first_name  LIKE :q2
                        OR w.last_name   LIKE :q3
-                       OR w.role        LIKE :q4
-                       OR w.employee_id LIKE :q5)";
+                       OR w.employee_id LIKE :q4)";
     $params[':q']  = '%' . $query . '%';
     $params[':q2'] = '%' . $query . '%';
     $params[':q3'] = '%' . $query . '%';
