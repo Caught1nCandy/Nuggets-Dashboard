@@ -47,7 +47,8 @@ $stmt = $pdo->prepare("
         l.state,
         mgr.first_name  AS manager_first,
         mgr.last_name   AS manager_last,
-        mgr.employee_id AS manager_id
+        mgr.employee_id AS manager_id,
+        mgr.role        AS manager_role
     FROM workforce w
     LEFT JOIN job          j   ON j.job_code      = w.job_code
     LEFT JOIN organization o   ON o.org_id        = w.org_id
