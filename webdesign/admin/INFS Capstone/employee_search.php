@@ -409,6 +409,9 @@ $orgs = $showFilters ? $pdo->query("
       max-width: 500px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.18);
       overflow: hidden;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .modal-top {
@@ -461,6 +464,8 @@ $orgs = $showFilters ? $pdo->query("
 
     .modal-body {
       padding: 20px 24px 24px;
+      overflow-y: auto;
+      flex: 1;
     }
 
     /* Notice bar shown inside modal for restricted employees */
