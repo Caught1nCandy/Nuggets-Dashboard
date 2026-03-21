@@ -8,17 +8,21 @@ if (!isset($_SESSION['authorized'])) {
 
 require_once __DIR__ . '/db_config.php';
 
-$locations = $pdo->query("
+// Only load filter dropdowns for roles that can actually use them
+// Employees see only themselves so filters are irrelevant
+$showFilters = !in_array($_SESSION['role'], ['employee']);
+
+$locations = $showFilters ? $pdo->query("
     SELECT DISTINCT work_city, state
     FROM location
     ORDER BY work_city
-")->fetchAll();
+")->fetchAll() : [];
 
-$orgs = $pdo->query("
+$orgs = $showFilters ? $pdo->query("
     SELECT org_id, organization_name
     FROM organization
     ORDER BY organization_name
-")->fetchAll();
+")->fetchAll() : [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -296,6 +300,11 @@ $orgs = $pdo->query("
       box-shadow: 0 3px 12px rgba(77,20,140,0.1);
     }
 
+    /* Dimmed style for name-only cards */
+    .result-card.restricted {
+      opacity: 0.75;
+    }
+
     .role-badge {
       width: 40px;
       height: 40px;
@@ -347,6 +356,14 @@ $orgs = $pdo->query("
     }
 
     .result-meta span { margin-right: 12px; }
+
+    /* Lock label shown on name-only cards instead of meta */
+    .result-restricted-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-style: italic;
+    }
 
     .result-arrow {
       color: var(--purple);
@@ -446,6 +463,18 @@ $orgs = $pdo->query("
       padding: 20px 24px 24px;
     }
 
+    /* Notice bar shown inside modal for restricted employees */
+    .modal-restricted-notice {
+      background: #f8f4ff;
+      border: 1px solid #ddd0f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      font-style: italic;
+    }
+
     .detail-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -504,7 +533,8 @@ $orgs = $pdo->query("
     </div>
   </div>
 
-  <!-- Filters -->
+  <!-- Filters — hidden for employees since they can only see themselves -->
+  <?php if ($showFilters): ?>
   <div class="filters-card">
     <div class="filters-title">&#9776;&nbsp; Filter by</div>
     <div class="filters-grid">
@@ -550,6 +580,7 @@ $orgs = $pdo->query("
       <button class="clear-btn" onclick="clearFilters()">Clear filters</button>
     </div>
   </div>
+  <?php endif; ?>
 
   <!-- Results -->
   <div class="results-header">
@@ -577,12 +608,19 @@ $orgs = $pdo->query("
       <button class="modal-close" onclick="closeModalDirect()">&#215;</button>
     </div>
     <div class="modal-body">
+      <div id="modal-restricted-notice" class="modal-restricted-notice" style="display:none;">
+        &#128274; You can view this person's name and birthday only.
+      </div>
       <div class="detail-grid" id="modal-detail-grid"></div>
     </div>
   </div>
 </div>
 
 <script>
+// ── Role passed from PHP session — used to drive UI decisions ──
+const userRole     = <?= json_encode($_SESSION['role']) ?>;
+const myEmployeeId = <?= json_encode($_SESSION['employee_id']) ?>;
+
 const searchInput  = document.getElementById('search-input');
 const resultsList  = document.getElementById('results-list');
 const resultsCount = document.getElementById('results-count');
@@ -612,11 +650,19 @@ function roleInitials(role) {
   return map[role] || role.substring(0,3).toUpperCase();
 }
 
+// Format a birthday date string (YYYY-MM-DD) as "Month Day" e.g. "March 14"
+function formatBirthday(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+
 function fetchResults() {
   const q        = searchInput.value.trim();
-  const location = document.getElementById('filter-location').value;
-  const org      = document.getElementById('filter-org').value;
-  const tenure   = document.getElementById('filter-tenure').value;
+  const location = document.getElementById('filter-location') ? document.getElementById('filter-location').value : '';
+  const org      = document.getElementById('filter-org')      ? document.getElementById('filter-org').value      : '';
+  const tenure   = document.getElementById('filter-tenure')   ? document.getElementById('filter-tenure').value   : '';
 
   if (!q && !location && !org && !tenure) {
     resultsList.innerHTML = `
@@ -654,47 +700,79 @@ function renderResults(data, query) {
   resultsCount.innerHTML = `Showing <strong>${data.length}</strong> result${data.length !== 1 ? 's' : ''}`;
 
   resultsList.innerHTML = data.map(emp => {
-    const fullName = emp.first_name + ' ' + emp.last_name;
-    const role     = emp.role || 'Employee';
-    const initials = roleInitials(role);
-    const location = emp.work_city && emp.state ? `${emp.work_city}, ${emp.state}` : '—';
-    const dept     = emp.organization_name || '—';
-    const title    = emp.title || '—';
-    const tenure   = emp.tenure !== null ? emp.tenure + ' yr' + (emp.tenure !== 1 ? 's' : '') : '—';
+    const fullName   = emp.first_name + ' ' + emp.last_name;
+    const role       = emp.role || 'Employee';
+    const initials   = roleInitials(role);
+    const restricted = emp.view_level === 'name_only';
 
+    // Full detail card
+    if (!restricted) {
+      const location = emp.work_city && emp.state ? `${emp.work_city}, ${emp.state}` : '—';
+      const dept     = emp.organization_name || '—';
+      const title    = emp.title || '—';
+      const tenure   = emp.tenure !== null ? emp.tenure + ' yr' + (emp.tenure !== 1 ? 's' : '') : '—';
+
+      return `
+        <div class="result-card" onclick='openModal(${JSON.stringify(emp)})'>
+          <div class="role-badge ${escHtml(role)}">${initials}</div>
+          <div class="result-info">
+            <div class="result-name">${highlight(fullName, query)}</div>
+            <div class="result-meta">
+              <span>&#128205; ${escHtml(location)}</span>
+              <span>&#127970; ${escHtml(dept)}</span>
+              <span>&#128188; ${escHtml(title)}</span>
+              <span>&#8987; ${tenure}</span>
+            </div>
+          </div>
+          <div class="result-arrow">&#8250;</div>
+        </div>`;
+    }
+
+    // Name-only card (manager seeing peer employees)
     return `
-      <div class="result-card" onclick='openModal(${JSON.stringify(emp)})'>
+      <div class="result-card restricted" onclick='openModal(${JSON.stringify(emp)})'>
         <div class="role-badge ${escHtml(role)}">${initials}</div>
         <div class="result-info">
           <div class="result-name">${highlight(fullName, query)}</div>
-          <div class="result-meta">
-            <span>&#128205; ${escHtml(location)}</span>
-            <span>&#127970; ${escHtml(dept)}</span>
-            <span>&#128188; ${escHtml(title)}</span>
-            <span>&#8987; ${tenure}</span>
-          </div>
+          <div class="result-restricted-label">&#128274; Limited visibility</div>
         </div>
         <div class="result-arrow">&#8250;</div>
       </div>`;
+
   }).join('');
 }
 
 function openModal(emp) {
-  const role     = emp.role || 'Employee';
-  const fullName = emp.first_name + ' ' + emp.last_name;
+  const role       = emp.role || 'Employee';
+  const fullName   = emp.first_name + ' ' + emp.last_name;
+  const restricted = emp.view_level === 'name_only';
 
   document.getElementById('modal-avatar').textContent     = roleInitials(role);
   document.getElementById('modal-name').textContent       = fullName;
   document.getElementById('modal-title-role').textContent = (emp.title || role) + ' · ' + role;
 
-  const fields = [
-    { label: 'Employee ID', value: emp.employee_id },
-    { label: 'Pay Band',    value: emp.pay_band || '—' },
-    { label: 'Department',  value: emp.organization_name || '—' },
-    { label: 'Location',    value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
-    { label: 'Tenure',      value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
-    { label: 'Job Type',    value: emp.job_type || '—' },
-  ];
+  const notice = document.getElementById('modal-restricted-notice');
+  notice.style.display = restricted ? 'block' : 'none';
+
+  let fields;
+
+  if (restricted) {
+    // Name-only view: just birthday (everyone can see birthdays per policy)
+    fields = [
+      { label: 'Birthday', value: formatBirthday(emp.birthday) },
+    ];
+  } else {
+    // Full detail view
+    fields = [
+      { label: 'Employee ID', value: emp.employee_id },
+      { label: 'Pay Band',    value: emp.pay_band            || '—' },
+      { label: 'Department',  value: emp.organization_name   || '—' },
+      { label: 'Location',    value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+      { label: 'Tenure',      value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
+      { label: 'Job Type',    value: emp.job_type             || '—' },
+      { label: 'Birthday',    value: formatBirthday(emp.birthday) },
+    ];
+  }
 
   document.getElementById('modal-detail-grid').innerHTML = fields.map(f => `
     <div class="detail-item">
@@ -722,14 +800,17 @@ searchInput.addEventListener('input', () => {
   debounceTimer = setTimeout(fetchResults, 200);
 });
 
+// Only wire up filter listeners if the filter panel was rendered
 ['filter-location','filter-org','filter-tenure'].forEach(id => {
-  document.getElementById(id).addEventListener('change', fetchResults);
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', fetchResults);
 });
 
 function clearFilters() {
-  document.getElementById('filter-location').value = '';
-  document.getElementById('filter-org').value      = '';
-  document.getElementById('filter-tenure').value   = '';
+  ['filter-location','filter-org','filter-tenure'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   fetchResults();
 }
 </script>
