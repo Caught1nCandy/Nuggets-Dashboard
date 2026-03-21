@@ -419,7 +419,7 @@ foreach ($anniversaryRows as $r) {
   </style>
 </head>
 <body>
-
+<?php include __DIR__ . '/impersonation_banner.php'; ?>
   <div class="site-header">
     <div class="orange-bar"></div>
     <span class="page-title">Events</span>
