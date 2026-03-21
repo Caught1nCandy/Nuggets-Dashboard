@@ -28,8 +28,8 @@ $PERMISSIONS = [
     ],
 
     'director' => [
-        'scope'       => 'own_chain',  // everyone whose director_id = me
-        'view_fields' => 'full',
+        'scope'            => 'own_chain',  // everyone whose director_id = me
+        'view_fields'      => 'full',
         'see_subordinates' => true,
     ],
 
@@ -98,6 +98,19 @@ function getViewLevel($myRole, $myId, $targetId, $pdo) {
                 if ($stmt->fetch()) return $p['peer_view_fields'];
             }
 
+            // Directors can see all other directors (name_only)
+            if ($myRole === 'director') {
+                $stmt = $pdo->prepare("
+                    SELECT w.employee_id FROM workforce w
+                    JOIN workforce me ON me.employee_id = ?
+                    WHERE w.employee_id = ?
+                      AND w.vp_id = me.vp_id
+                      AND w.vp_id IS NOT NULL
+                ");
+                $stmt->execute([$myId, $targetId]);
+                if ($stmt->fetch()) return $p['peer_view_fields'];
+            }
+
             return 'none';
     }
 
@@ -142,6 +155,21 @@ function getScopeClause($myRole, $myId, $pdo) {
 
             if (!$chainCol) {
                 return ['sql' => 'w.employee_id = :scope_self', 'params' => [':scope_self' => $myId]];
+            }
+
+// Directors see their own chain + all other directors company-wide
+            if ($myRole === 'director') {
+                return [
+                    'sql' => "(
+                        w.employee_id = :scope_self
+                        OR w.director_id = :scope_dir
+                        OR w.role = 'Director'
+                    )",
+                    'params' => [
+                        ':scope_self' => $myId,
+                        ':scope_dir'  => $myId,
+                    ],
+                ];
             }
 
             // Managers also see peers under same director (even if name_only)
