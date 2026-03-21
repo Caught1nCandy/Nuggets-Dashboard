@@ -497,6 +497,103 @@ $orgs = $showFilters ? $pdo->query("
       color: var(--text);
     }
 
+
+    /* ── Subordinates list inside modal ── */
+    .subordinates-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+
+    .subordinates-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .subordinate-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border: 1px solid transparent;
+    }
+
+    .subordinate-row:hover {
+      background: #f4f0fb;
+      border-color: #ddd0f0;
+    }
+
+    .subordinate-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+
+    .subordinate-badge.Employee  { background: #ede0f8; color: var(--purple); }
+    .subordinate-badge.Manager   { background: #fff0e6; color: var(--orange); }
+    .subordinate-badge.Director  { background: #e6f0ff; color: #1a56c4; }
+    .subordinate-badge.VP        { background: #e6faf0; color: #1a7a4a; }
+    .subordinate-badge.SVP       { background: #fff8e6; color: #b07000; }
+
+    .subordinate-info { flex: 1; min-width: 0; }
+
+    .subordinate-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .subordinate-meta  { font-size: 11px; color: var(--muted); }
+    .subordinate-lock  { font-size: 11px; color: var(--muted); font-style: italic; }
+
+    .subordinate-arrow {
+      color: var(--purple);
+      font-size: 14px;
+      opacity: 0.4;
+    }
+
+    .subordinate-row:hover .subordinate-arrow { opacity: 1; }
+
+    /* ── Modal back button ── */
+    .modal-back {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 13px;
+      font-family: 'Open Sans', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .modal-back:hover { color: #fff; }
+
+    .modal-loading {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     @media (max-width: 600px) {
       .filters-grid { grid-template-columns: 1fr; }
       .detail-grid  { grid-template-columns: 1fr; }
@@ -504,7 +601,9 @@ $orgs = $showFilters ? $pdo->query("
   </style>
 </head>
 <body>
+
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
+
 <div class="site-header">
   <div class="orange-bar"></div>
   <span class="page-title">Employee Search</span>
@@ -520,7 +619,6 @@ $orgs = $showFilters ? $pdo->query("
 
 <div class="search-wrapper">
 
-  <!-- Search input -->
   <div class="search-row">
     <div class="search-input-wrap">
       <span class="search-icon">&#128269;</span>
@@ -533,7 +631,6 @@ $orgs = $showFilters ? $pdo->query("
     </div>
   </div>
 
-  <!-- Filters — hidden for employees since they can only see themselves -->
   <?php if ($showFilters): ?>
   <div class="filters-card">
     <div class="filters-title">&#9776;&nbsp; Filter by</div>
@@ -582,7 +679,6 @@ $orgs = $showFilters ? $pdo->query("
   </div>
   <?php endif; ?>
 
-  <!-- Results -->
   <div class="results-header">
     <div class="results-count" id="results-count"></div>
   </div>
@@ -599,7 +695,8 @@ $orgs = $showFilters ? $pdo->query("
 <!-- Employee detail modal -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" id="modal">
-    <div class="modal-top">
+    <div class="modal-top" id="modal-top">
+      <button class="modal-back" id="modal-back" onclick="modalGoBack()" style="display:none;">&#8592; Back</button>
       <div class="modal-avatar" id="modal-avatar"></div>
       <div class="modal-top-info">
         <h2 id="modal-name"></h2>
@@ -607,17 +704,13 @@ $orgs = $showFilters ? $pdo->query("
       </div>
       <button class="modal-close" onclick="closeModalDirect()">&#215;</button>
     </div>
-    <div class="modal-body">
-      <div id="modal-restricted-notice" class="modal-restricted-notice" style="display:none;">
-        &#128274; You can view this person's name and birthday only.
-      </div>
-      <div class="detail-grid" id="modal-detail-grid"></div>
+    <div class="modal-body" id="modal-body">
+      <div class="modal-loading">Loading...</div>
     </div>
   </div>
 </div>
 
 <script>
-// ── Role passed from PHP session — used to drive UI decisions ──
 const userRole     = <?= json_encode($_SESSION['role']) ?>;
 const myEmployeeId = <?= json_encode($_SESSION['employee_id']) ?>;
 
@@ -625,14 +718,12 @@ const searchInput  = document.getElementById('search-input');
 const resultsList  = document.getElementById('results-list');
 const resultsCount = document.getElementById('results-count');
 
+// Stack of employee IDs for back navigation inside modal
+let modalStack = [];
+
 let debounceTimer = null;
 
-function highlight(text, query) {
-  if (!query) return escHtml(text);
-  const escaped = escHtml(text);
-  const re = new RegExp('(' + escRe(query) + ')', 'gi');
-  return escaped.replace(re, '<mark>$1</mark>');
-}
+// ── Helpers ────────────────────────────────────────────────
 
 function escHtml(s) {
   return String(s)
@@ -644,19 +735,34 @@ function escRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function highlight(text, query) {
+  if (!query) return escHtml(text);
+  const escaped = escHtml(text);
+  const re = new RegExp('(' + escRe(query) + ')', 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+
 function roleInitials(role) {
   if (!role) return '?';
   const map = { Employee:'EMP', Manager:'MGR', Director:'DIR', VP:'VP', SVP:'SVP' };
   return map[role] || role.substring(0,3).toUpperCase();
 }
 
-// Format a birthday date string (YYYY-MM-DD) as "Month Day" e.g. "March 14"
 function formatBirthday(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return '—';
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
+
+function formatAnniversary(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// ── Search ─────────────────────────────────────────────────
 
 function fetchResults() {
   const q        = searchInput.value.trim();
@@ -665,20 +771,14 @@ function fetchResults() {
   const tenure   = document.getElementById('filter-tenure')   ? document.getElementById('filter-tenure').value   : '';
 
   if (!q && !location && !org && !tenure) {
-    resultsList.innerHTML = `
-      <div class="state-msg">
-        <div class="big">&#128269;</div>
-        Start typing to search employees
-      </div>`;
+    resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128269;</div>Start typing to search employees</div>`;
     resultsCount.innerHTML = '';
     return;
   }
 
   resultsList.innerHTML = `<div class="state-msg">Searching...</div>`;
 
-  const params = new URLSearchParams({ q, location, org, tenure });
-
-  fetch('search_api.php?' + params.toString())
+  fetch('search_api.php?' + new URLSearchParams({ q, location, org, tenure }).toString())
     .then(r => r.json())
     .then(data => renderResults(data, q))
     .catch(() => {
@@ -688,11 +788,7 @@ function fetchResults() {
 
 function renderResults(data, query) {
   if (data.length === 0) {
-    resultsList.innerHTML = `
-      <div class="state-msg">
-        <div class="big">&#128566;</div>
-        No employees found
-      </div>`;
+    resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128566;</div>No employees found</div>`;
     resultsCount.innerHTML = '';
     return;
   }
@@ -705,20 +801,19 @@ function renderResults(data, query) {
     const initials   = roleInitials(role);
     const restricted = emp.view_level === 'name_only';
 
-    // Full detail card
     if (!restricted) {
-      const location = emp.work_city && emp.state ? `${emp.work_city}, ${emp.state}` : '—';
-      const dept     = emp.organization_name || '—';
-      const title    = emp.title || '—';
-      const tenure   = emp.tenure !== null ? emp.tenure + ' yr' + (emp.tenure !== 1 ? 's' : '') : '—';
+      const loc    = emp.work_city && emp.state ? `${emp.work_city}, ${emp.state}` : '—';
+      const dept   = emp.organization_name || '—';
+      const title  = emp.title || '—';
+      const tenure = emp.tenure !== null ? emp.tenure + ' yr' + (emp.tenure !== 1 ? 's' : '') : '—';
 
       return `
-        <div class="result-card" onclick='openModal(${JSON.stringify(emp)})'>
+        <div class="result-card" onclick="openModal('${escHtml(emp.employee_id)}')">
           <div class="role-badge ${escHtml(role)}">${initials}</div>
           <div class="result-info">
             <div class="result-name">${highlight(fullName, query)}</div>
             <div class="result-meta">
-              <span>&#128205; ${escHtml(location)}</span>
+              <span>&#128205; ${escHtml(loc)}</span>
               <span>&#127970; ${escHtml(dept)}</span>
               <span>&#128188; ${escHtml(title)}</span>
               <span>&#8987; ${tenure}</span>
@@ -728,9 +823,8 @@ function renderResults(data, query) {
         </div>`;
     }
 
-    // Name-only card (manager seeing peer employees)
     return `
-      <div class="result-card restricted" onclick='openModal(${JSON.stringify(emp)})'>
+      <div class="result-card restricted" onclick="openModal('${escHtml(emp.employee_id)}')">
         <div class="role-badge ${escHtml(role)}">${initials}</div>
         <div class="result-info">
           <div class="result-name">${highlight(fullName, query)}</div>
@@ -738,11 +832,38 @@ function renderResults(data, query) {
         </div>
         <div class="result-arrow">&#8250;</div>
       </div>`;
-
   }).join('');
 }
 
-function openModal(emp) {
+// ── Modal ──────────────────────────────────────────────────
+
+function openModal(employeeId) {
+  // Push to stack so back button can return
+  modalStack.push(employeeId);
+  document.getElementById('modal-back').style.display = modalStack.length > 1 ? 'flex' : 'none';
+
+  // Show overlay with loading state immediately
+  document.getElementById('modal-avatar').textContent = '...';
+  document.getElementById('modal-name').textContent   = 'Loading...';
+  document.getElementById('modal-title-role').textContent = '';
+  document.getElementById('modal-body').innerHTML     = '<div class="modal-loading">&#8987; Fetching details...</div>';
+  document.getElementById('modal-overlay').classList.add('open');
+
+  fetch('employee_detail_api.php?id=' + encodeURIComponent(employeeId))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('modal-body').innerHTML = `<div class="modal-loading">&#10060; ${escHtml(data.error)}</div>`;
+        return;
+      }
+      renderModal(data.employee, data.subordinates);
+    })
+    .catch(() => {
+      document.getElementById('modal-body').innerHTML = '<div class="modal-loading">Error loading employee details.</div>';
+    });
+}
+
+function renderModal(emp, subordinates) {
   const role       = emp.role || 'Employee';
   const fullName   = emp.first_name + ' ' + emp.last_name;
   const restricted = emp.view_level === 'name_only';
@@ -751,36 +872,89 @@ function openModal(emp) {
   document.getElementById('modal-name').textContent       = fullName;
   document.getElementById('modal-title-role').textContent = (emp.title || role) + ' · ' + role;
 
-  const notice = document.getElementById('modal-restricted-notice');
-  notice.style.display = restricted ? 'block' : 'none';
+  let bodyHtml = '';
 
-  let fields;
-
+  // Restricted notice
   if (restricted) {
-    // Name-only view: just birthday (everyone can see birthdays per policy)
+    bodyHtml += `
+      <div class="modal-restricted-notice">
+        &#128274; You can view this person's name and birthday only.
+      </div>`;
+  }
+
+  // Detail fields
+  let fields;
+  if (restricted) {
     fields = [
       { label: 'Birthday', value: formatBirthday(emp.birthday) },
     ];
   } else {
-    // Full detail view
     fields = [
-      { label: 'Employee ID', value: emp.employee_id },
-      { label: 'Pay Band',    value: emp.pay_band            || '—' },
-      { label: 'Department',  value: emp.organization_name   || '—' },
-      { label: 'Location',    value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
-      { label: 'Tenure',      value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
-      { label: 'Job Type',    value: emp.job_type             || '—' },
-      { label: 'Birthday',    value: formatBirthday(emp.birthday) },
+      { label: 'Employee ID',  value: emp.employee_id },
+      { label: 'Department',   value: emp.organization_name || '—' },
+      { label: 'Title',        value: emp.title             || '—' },
+      { label: 'Job Type',     value: emp.job_type          || '—' },
+      { label: 'Pay Band',     value: emp.pay_band          || '—' },
+      { label: 'Location',     value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+      { label: 'Tenure',       value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
+      { label: 'Anniversary',  value: formatAnniversary(emp.anniversary) },
+      { label: 'Birthday',     value: formatBirthday(emp.birthday) },
+      { label: 'Manager',      value: emp.manager_first ? emp.manager_first + ' ' + emp.manager_last : '—' },
     ];
   }
 
-  document.getElementById('modal-detail-grid').innerHTML = fields.map(f => `
+  bodyHtml += `<div class="detail-grid">` + fields.map(f => `
     <div class="detail-item">
       <label>${escHtml(f.label)}</label>
       <span>${escHtml(String(f.value))}</span>
-    </div>`).join('');
+    </div>`).join('') + `</div>`;
 
-  document.getElementById('modal-overlay').classList.add('open');
+  // Subordinates section
+  if (subordinates && subordinates.length > 0) {
+    bodyHtml += `
+      <div class="subordinates-section">
+        <div class="subordinates-title">&#128101; Direct Reports (${subordinates.length})</div>`;
+
+    subordinates.forEach(sub => {
+      const subRole       = sub.role || 'Employee';
+      const subName       = sub.first_name + ' ' + sub.last_name;
+      const subRestricted = sub.view_level === 'name_only';
+      const subTitle      = sub.title || subRole;
+      const subLoc        = sub.work_city && sub.state ? sub.work_city + ', ' + sub.state : '';
+
+      bodyHtml += `
+        <div class="subordinate-row" onclick="openModal('${escHtml(sub.employee_id)}')">
+          <div class="subordinate-badge ${escHtml(subRole)}">${roleInitials(subRole)}</div>
+          <div class="subordinate-info">
+            <div class="subordinate-name">${escHtml(subName)}</div>`;
+
+      if (subRestricted) {
+        bodyHtml += `<div class="subordinate-lock">&#128274; Name &amp; birthday only</div>`;
+      } else {
+        bodyHtml += `<div class="subordinate-meta">${escHtml(subTitle)}${subLoc ? ' · ' + escHtml(subLoc) : ''}</div>`;
+      }
+
+      bodyHtml += `
+          </div>
+          <div class="subordinate-arrow">&#8250;</div>
+        </div>`;
+    });
+
+    bodyHtml += `</div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = bodyHtml;
+}
+
+function modalGoBack() {
+  // Pop current, re-open previous
+  modalStack.pop();
+  const prevId = modalStack.pop(); // openModal will re-push it
+  if (prevId) {
+    openModal(prevId);
+  } else {
+    closeModalDirect();
+  }
 }
 
 function closeModal(e) {
@@ -789,18 +963,21 @@ function closeModal(e) {
 
 function closeModalDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
+  modalStack = [];
+  document.getElementById('modal-back').style.display = 'none';
 }
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModalDirect();
 });
 
+// ── Search event listeners ─────────────────────────────────
+
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(fetchResults, 200);
 });
 
-// Only wire up filter listeners if the filter panel was rendered
 ['filter-location','filter-org','filter-tenure'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', fetchResults);
