@@ -71,7 +71,7 @@ $emp['view_level'] = $viewLevel;
 // ── Fetch direct reports ────────────────────────────────────
 $subordinates = [];
 
-if (canSeeSubordinates($myRole) && $viewLevel === 'full') {
+if (canSeeSubordinates($myRole) && $viewLevel !== 'none') {
     $stmt = $pdo->prepare("
         SELECT
             w.employee_id,
@@ -94,6 +94,10 @@ if (canSeeSubordinates($myRole) && $viewLevel === 'full') {
 
     foreach ($reports as $report) {
         $childLevel = getViewLevel($myRole, $myId, $report['employee_id'], $pdo);
+        // If we only have name_only on the parent, cap children at name_only too
+        if ($viewLevel === 'name_only' && $childLevel === 'full') {
+            $childLevel = 'name_only';
+        }
         if ($childLevel !== 'none') {
             $report['view_level'] = $childLevel;
             $subordinates[] = $report;
