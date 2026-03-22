@@ -93,14 +93,17 @@ if (canSeeSubordinates($myRole) && $viewLevel !== 'none') {
     $reports = $stmt->fetchAll();
 
     foreach ($reports as $report) {
-        $childLevel = getViewLevel($myRole, $myId, $report['employee_id'], $pdo);
-        // If we only have name_only on the parent, cap children at name_only too
-        if ($viewLevel === 'name_only' && $childLevel === 'full') {
-            $childLevel = 'name_only';
-        }
-        if ($childLevel !== 'none') {
-            $report['view_level'] = $childLevel;
+        // If we only have name_only on the parent (e.g. peer director),
+        // skip getViewLevel entirely and force all children to name_only
+        if ($viewLevel === 'name_only') {
+            $report['view_level'] = 'name_only';
             $subordinates[] = $report;
+        } else {
+            $childLevel = getViewLevel($myRole, $myId, $report['employee_id'], $pdo);
+            if ($childLevel !== 'none') {
+                $report['view_level'] = $childLevel;
+                $subordinates[] = $report;
+            }
         }
     }
 }
