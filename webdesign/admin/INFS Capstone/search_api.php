@@ -135,7 +135,7 @@ $stmt = $pdo->prepare("
             ELSE 1
         END ASC,
         w.last_name, w.first_name
-    LIMIT 50
+    LIMIT 500
 ");
 
 $params[':sort_self'] = $myId;
