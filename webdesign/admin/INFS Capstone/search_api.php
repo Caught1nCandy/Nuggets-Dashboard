@@ -53,6 +53,16 @@ if ($myRole === 'manager') {
     ";
     $params[':vl_self'] = $myId;
     $params[':vl_dir']  = $myId;
+} elseif ($myRole === 'vp') {
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self THEN 'full'
+            WHEN w.vp_id       = :vl_vp   THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+    $params[':vl_vp']   = $myId;
 } else {
     $viewLevelSQL = "'" . $p['view_fields'] . "'";
 }
@@ -116,9 +126,21 @@ $stmt = $pdo->prepare("
     LEFT JOIN organization o ON o.org_id      = w.org_id
     LEFT JOIN location     l ON l.location_id = w.location_id
     WHERE $whereSQL
-    ORDER BY w.last_name, w.first_name
+    ORDER BY
+        -- Own chain first, then peers
+        CASE
+            WHEN w.employee_id = :sort_self THEN 0
+            WHEN w.director_id = :sort_dir  THEN 0
+            WHEN w.manager_id  = :sort_mgr  THEN 0
+            ELSE 1
+        END ASC,
+        w.last_name, w.first_name
     LIMIT 50
 ");
+
+$params[':sort_self'] = $myId;
+$params[':sort_dir']  = $myId;
+$params[':sort_mgr']  = $myId;
 
 $stmt->execute($params);
 echo json_encode($stmt->fetchAll());
