@@ -43,6 +43,17 @@ if ($myRole === 'manager' && isset($p['peer_view_fields'])) {
     ";
     $params[':vl_self'] = $myId;
     $params[':vl_mgr']  = $myId;
+} elseif ($myRole === 'director') {
+    // Full for self + own chain, name_only for peer directors under same VP
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self      THEN 'full'
+            WHEN w.director_id = :vl_dir       THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+    $params[':vl_dir']  = $myId;
 } else {
     $viewLevelSQL = "'" . $p['view_fields'] . "'";
 }
