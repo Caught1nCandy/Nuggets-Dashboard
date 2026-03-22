@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 // ============================================================
 // permissions.php — Central access control config
 // Include this in any PHP file that needs to check permissions.
