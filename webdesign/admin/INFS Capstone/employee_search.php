@@ -896,7 +896,7 @@ function renderModal(emp, subordinates) {
   if (restricted) {
     bodyHtml += `
       <div class="modal-restricted-notice">
-        &#128274; You can view this person's name and birthday only.
+        &#128274; Limited view: name, birthday, title, location and department only.
       </div>`;
   }
 
@@ -950,7 +950,7 @@ function renderModal(emp, subordinates) {
             <div class="subordinate-name">${escHtml(subName)}</div>`;
 
       if (subRestricted) {
-        bodyHtml += `<div class="subordinate-lock">&#128274; Name &amp; birthday only</div>`;
+        bodyHtml += `<div class="subordinate-lock">&#128274; Limited view</div>`;
       } else {
         bodyHtml += `<div class="subordinate-meta">${escHtml(subTitle)}${subLoc ? ' · ' + escHtml(subLoc) : ''}</div>`;
       }
