@@ -90,6 +90,21 @@ function getViewLevel($myRole, $myId, $targetId, $pdo) {
         ");
         $stmt->execute([$myId, $targetId]);
         if ($stmt->fetch()) return $p['peer_view_fields'];
+
+        // Anyone who reports to a peer director also gets name_only
+        $stmt = $pdo->prepare("
+            SELECT w.employee_id
+            FROM workforce w
+            JOIN workforce dir ON dir.employee_id = w.director_id
+            JOIN workforce me  ON me.employee_id  = ?
+            WHERE w.employee_id = ?
+              AND dir.role = 'Director'
+              AND dir.vp_id IS NOT NULL
+              AND me.vp_id IS NOT NULL
+              AND dir.vp_id = me.vp_id
+        ");
+        $stmt->execute([$myId, $targetId]);
+        if ($stmt->fetch()) return $p['peer_view_fields'];
     }
 
     // Manager peer check: others under same director
