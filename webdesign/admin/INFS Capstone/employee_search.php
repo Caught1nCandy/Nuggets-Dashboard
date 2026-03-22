@@ -677,18 +677,6 @@ $orgs = $showFilters ? $pdo->query("
         </select>
       </div>
 
-      <div class="filter-group">
-        <label>Years Employed</label>
-        <select id="filter-tenure">
-          <option value="">Any tenure</option>
-          <option value="0-1">0–1 years</option>
-          <option value="2-4">2–4 years</option>
-          <option value="5-9">5–9 years</option>
-          <option value="10-19">10–19 years</option>
-          <option value="20+">20+ years</option>
-        </select>
-      </div>
-
     </div>
     <div class="filter-actions">
       <button class="clear-btn" onclick="clearFilters()">Clear filters</button>
@@ -785,10 +773,9 @@ function fetchResults() {
   const q        = searchInput.value.trim();
   const location = document.getElementById('filter-location') ? document.getElementById('filter-location').value : '';
   const org      = document.getElementById('filter-org')      ? document.getElementById('filter-org').value      : '';
-  const tenure   = document.getElementById('filter-tenure')   ? document.getElementById('filter-tenure').value   : '';
   const role     = document.getElementById('filter-role')     ? document.getElementById('filter-role').value     : '';
 
-  if (!q && !location && !org && !tenure && !role) {
+  if (!q && !location && !org && !role) {
     resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128269;</div>Start typing to search employees</div>`;
     resultsCount.innerHTML = '';
     return;
@@ -796,7 +783,7 @@ function fetchResults() {
 
   resultsList.innerHTML = `<div class="state-msg">Searching...</div>`;
 
-  fetch('search_api.php?' + new URLSearchParams({ q, location, org, tenure, role }).toString())
+  fetch('search_api.php?' + new URLSearchParams({ q, location, org, role }).toString())
     .then(r => r.json())
     .then(data => renderResults(data, q))
     .catch(() => {
@@ -999,13 +986,13 @@ searchInput.addEventListener('input', () => {
   debounceTimer = setTimeout(fetchResults, 200);
 });
 
-['filter-location','filter-org','filter-tenure','filter-role'].forEach(id => {
+['filter-location','filter-org','filter-role'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', fetchResults);
 });
 
 function clearFilters() {
-  ['filter-location','filter-org','filter-tenure','filter-role'].forEach(id => {
+  ['filter-location','filter-org','filter-role'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
