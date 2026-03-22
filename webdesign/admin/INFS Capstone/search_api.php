@@ -1,213 +1,125 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-// ============================================================
-// permissions.php — Central access control config
-// Include this in any PHP file that needs to check permissions.
-//
-// TO CHANGE WHAT A ROLE CAN SEE: edit this file only.
-// Nothing else needs to change.
-// ============================================================
+session_start();
+header('Content-Type: application/json');
 
-$PERMISSIONS = [
+if (!isset($_SESSION['authorized'])) {
+    http_response_code(401);
+    echo json_encode([]);
+    exit;
+}
 
-    'sysadmin' => [
-        'scope'            => 'all',
-        'view_fields'      => 'full',
-        'see_subordinates' => true,
-    ],
+require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/permissions.php';
 
-    'svp' => [
-        'scope'            => 'own_chain',  // everyone whose svp_id = me
-        'view_fields'      => 'full',
-        'see_subordinates' => true,
-    ],
+$myRole = $_SESSION['role'];
+$myId   = $_SESSION['employee_id'];
 
-    'vp' => [
-        'scope'            => 'own_chain',  // everyone whose vp_id = me
-        'view_fields'      => 'full',
-        'see_subordinates' => true,
-    ],
+$query    = trim($_GET['q']        ?? '');
+$location = trim($_GET['location'] ?? '');
+$org      = trim($_GET['org']      ?? '');
+$tenure   = trim($_GET['tenure']   ?? '');
+$role     = trim($_GET['role']     ?? '');
 
-    'director' => [
-        'scope'            => 'own_chain',   // own chain = full, peer directors same VP = name_only
-        'view_fields'      => 'full',
-        'peer_view_fields' => 'name_only',   // peer directors under same VP
-        'see_subordinates' => true,
-    ],
+if (strlen($query) < 1 && !$location && !$org && !$tenure && !$role) {
+    echo json_encode([]);
+    exit;
+}
 
-    'manager' => [
-        'scope'            => 'own_chain',   // own chain = full, peers same director = name_only
-        'view_fields'      => 'full',
-        'peer_view_fields' => 'name_only',   // peer employees/managers under same director
-        'see_subordinates' => true,
-    ],
+// ── Role scope from permissions.php ────────────────────────
+$scope  = getScopeClause($myRole, $myId, $pdo);
+$where  = [$scope['sql']];
+$params = $scope['params'];
 
-    'employee' => [
-        'scope'            => 'self',
-        'view_fields'      => 'full',
-        'see_subordinates' => false,
-    ],
+// ── view_level SQL ──────────────────────────────────────────
+$p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
 
-];
+if ($myRole === 'manager') {
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self THEN 'full'
+            WHEN w.manager_id  = :vl_mgr  THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+    $params[':vl_mgr']  = $myId;
+} elseif ($myRole === 'director') {
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self THEN 'full'
+            WHEN w.director_id = :vl_dir  THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+    $params[':vl_dir']  = $myId;
+} else {
+    $viewLevelSQL = "'" . $p['view_fields'] . "'";
+}
 
-// ============================================================
-// Helper: what fields is a viewer allowed to see on a target?
-// Returns: 'full' | 'name_only' | 'none'
-// ============================================================
-function getViewLevel($myRole, $myId, $targetId, $pdo) {
-    global $PERMISSIONS;
+// ── Search filters ──────────────────────────────────────────
+if ($query !== '') {
+    $where[]       = "(CONCAT(w.first_name, ' ', w.last_name) LIKE :q
+                       OR w.first_name  LIKE :q2
+                       OR w.last_name   LIKE :q3
+                       OR w.employee_id LIKE :q4)";
+    $params[':q']  = '%' . $query . '%';
+    $params[':q2'] = '%' . $query . '%';
+    $params[':q3'] = '%' . $query . '%';
+    $params[':q4'] = '%' . $query . '%';
+}
 
-    $p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
+if ($location !== '') {
+    $where[]             = 'l.work_city = :location';
+    $params[':location'] = $location;
+}
 
-    // Always full access to your own record
-    if ($targetId === $myId) return 'full';
+if ($org !== '') {
+    $where[]        = 'o.org_id = :org';
+    $params[':org'] = (int)$org;
+}
 
-    switch ($p['scope']) {
-
-        case 'all':
-            return $p['view_fields'];
-
-        case 'self':
-            return 'none';
-
-        case 'own_chain':
-            $chainCol = [
-                'svp'      => 'svp_id',
-                'vp'       => 'vp_id',
-                'director' => 'director_id',
-                'manager'  => 'manager_id',
-            ][$myRole] ?? null;
-
-            if (!$chainCol) return 'none';
-
-            // Is the target directly in my chain? (their chain column points to me)
-            $stmt = $pdo->prepare("SELECT employee_id FROM workforce WHERE employee_id = ? AND $chainCol = ?");
-            $stmt->execute([$targetId, $myId]);
-            if ($stmt->fetch()) return $p['view_fields'];
-
-            // Director peer check: other directors under the same VP → name_only
-            if ($myRole === 'director' && isset($p['peer_view_fields'])) {
-                $stmt = $pdo->prepare("
-                    SELECT w.employee_id
-                    FROM workforce w
-                    JOIN workforce me ON me.employee_id = ?
-                    WHERE w.employee_id = ?
-                      AND w.role = 'Director'
-                      AND w.vp_id = me.vp_id
-                      AND w.vp_id IS NOT NULL
-                      AND me.vp_id IS NOT NULL
-                ");
-                $stmt->execute([$myId, $targetId]);
-                if ($stmt->fetch()) return $p['peer_view_fields'];
-            }
-
-            // Manager peer check: employees/managers under same director → name_only
-            if ($myRole === 'manager' && isset($p['peer_view_fields'])) {
-                $stmt = $pdo->prepare("
-                    SELECT w.employee_id
-                    FROM workforce w
-                    JOIN workforce me ON me.employee_id = ?
-                    WHERE w.employee_id = ?
-                      AND w.director_id = me.director_id
-                      AND w.director_id IS NOT NULL
-                      AND me.director_id IS NOT NULL
-                ");
-                $stmt->execute([$myId, $targetId]);
-                if ($stmt->fetch()) return $p['peer_view_fields'];
-            }
-
-            return 'none';
+if ($tenure !== '') {
+    switch ($tenure) {
+        case '0-1':   $where[] = 'w.tenure < 2';               break;
+        case '2-4':   $where[] = 'w.tenure BETWEEN 2 AND 4';   break;
+        case '5-9':   $where[] = 'w.tenure BETWEEN 5 AND 9';   break;
+        case '10-19': $where[] = 'w.tenure BETWEEN 10 AND 19'; break;
+        case '20+':   $where[] = 'w.tenure >= 20';             break;
     }
-
-    return 'none';
 }
 
-// ============================================================
-// Helper: should this role see the subordinates list at all?
-// ============================================================
-function canSeeSubordinates($myRole) {
-    global $PERMISSIONS;
-    return $PERMISSIONS[$myRole]['see_subordinates'] ?? false;
+if ($role !== '') {
+    $where[]         = 'LOWER(w.role) = LOWER(:role)';
+    $params[':role'] = $role;
 }
 
-// ============================================================
-// Helper: build the WHERE clause scope for search_api.php
-// Returns ['sql' => string, 'params' => array]
-// ============================================================
-function getScopeClause($myRole, $myId, $pdo) {
-    global $PERMISSIONS;
+$whereSQL = implode(' AND ', $where);
 
-    $p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
+$stmt = $pdo->prepare("
+    SELECT
+        w.employee_id,
+        w.first_name,
+        w.last_name,
+        w.role,
+        w.tenure,
+        w.birthday,
+        j.title,
+        j.pay_band,
+        j.job_type,
+        o.organization_name,
+        l.work_city,
+        l.state,
+        ($viewLevelSQL) AS view_level
+    FROM workforce w
+    LEFT JOIN job          j ON j.job_code    = w.job_code
+    LEFT JOIN organization o ON o.org_id      = w.org_id
+    LEFT JOIN location     l ON l.location_id = w.location_id
+    WHERE $whereSQL
+    ORDER BY w.last_name, w.first_name
+    LIMIT 50
+");
 
-    switch ($p['scope']) {
-
-        case 'all':
-            return ['sql' => '1=1', 'params' => []];
-
-        case 'self':
-            return [
-                'sql'    => 'w.employee_id = :scope_self',
-                'params' => [':scope_self' => $myId],
-            ];
-
-        case 'own_chain':
-            $chainCol = [
-                'svp'      => 'svp_id',
-                'vp'       => 'vp_id',
-                'director' => 'director_id',
-                'manager'  => 'manager_id',
-            ][$myRole] ?? null;
-
-            if (!$chainCol) {
-                return ['sql' => 'w.employee_id = :scope_self', 'params' => [':scope_self' => $myId]];
-            }
-
-            // Directors: own chain + peer directors under same VP
-            if ($myRole === 'director') {
-                return [
-                    'sql' => "(
-                        w.employee_id = :scope_self
-                        OR w.director_id = :scope_dir
-                        OR (
-                            w.role = 'Director'
-                            AND w.vp_id = (SELECT vp_id FROM workforce WHERE employee_id = :scope_vp_lookup)
-                            AND w.vp_id IS NOT NULL
-                        )
-                    )",
-                    'params' => [
-                        ':scope_self'      => $myId,
-                        ':scope_dir'       => $myId,
-                        ':scope_vp_lookup' => $myId,
-                    ],
-                ];
-            }
-
-            // Managers: own chain + peers under same director
-            if ($myRole === 'manager') {
-                return [
-                    'sql' => "(
-                        w.employee_id = :scope_self
-                        OR w.manager_id = :scope_mgr
-                        OR w.director_id = (
-                            SELECT director_id FROM workforce WHERE employee_id = :scope_dir_lookup
-                        )
-                    )",
-                    'params' => [
-                        ':scope_self'       => $myId,
-                        ':scope_mgr'        => $myId,
-                        ':scope_dir_lookup' => $myId,
-                    ],
-                ];
-            }
-
-            // VP / SVP: everyone in their chain + themselves
-            return [
-                'sql'    => "(w.$chainCol = :scope_id OR w.employee_id = :scope_self)",
-                'params' => [':scope_id' => $myId, ':scope_self' => $myId],
-            ];
-    }
-
-    return ['sql' => '1=0', 'params' => []];
-}
+$stmt->execute($params);
+echo json_encode($stmt->fetchAll());
 ?>
