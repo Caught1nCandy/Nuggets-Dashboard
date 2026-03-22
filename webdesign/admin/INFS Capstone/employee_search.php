@@ -904,7 +904,10 @@ function renderModal(emp, subordinates) {
   let fields;
   if (restricted) {
     fields = [
-      { label: 'Birthday', value: formatBirthday(emp.birthday) },
+      { label: 'Birthday',   value: formatBirthday(emp.birthday) },
+      { label: 'Title',      value: emp.title             || '—' },
+      { label: 'Location',   value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+      { label: 'Department', value: emp.organization_name || '—' },
     ];
   } else {
     fields = [
