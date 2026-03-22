@@ -57,7 +57,6 @@ if ($query !== '') {
     $params[':q2'] = '%' . $query . '%';
     $params[':q3'] = '%' . $query . '%';
     $params[':q4'] = '%' . $query . '%';
-    $params[':q5'] = '%' . $query . '%';
 }
 
 if ($location !== '') {
@@ -78,6 +77,12 @@ if ($tenure !== '') {
         case '10-19': $where[] = 'w.tenure BETWEEN 10 AND 19'; break;
         case '20+':   $where[] = 'w.tenure >= 20';             break;
     }
+}
+
+// Filter: role
+if ($role !== '') {
+    $where[]         = 'LOWER(w.role) = LOWER(:role)';
+    $params[':role'] = $role;
 }
 
 $whereSQL = implode(' AND ', $where);
