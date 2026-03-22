@@ -76,6 +76,38 @@ function getViewLevel($myRole, $myId, $targetId, $pdo) {
     $stmt->execute([$targetId, $myId]);
     if ($stmt->fetch()) return $p['view_fields'];
 
+    // VP peer check: other VPs + their entire chain under same SVP
+    if ($myRole === 'vp') {
+        // Peer VP
+        $stmt = $pdo->prepare("
+            SELECT w.employee_id
+            FROM workforce w
+            JOIN workforce me ON me.employee_id = ?
+            WHERE w.employee_id = ?
+              AND w.role = 'VP'
+              AND w.svp_id IS NOT NULL
+              AND me.svp_id IS NOT NULL
+              AND w.svp_id = me.svp_id
+        ");
+        $stmt->execute([$myId, $targetId]);
+        if ($stmt->fetch()) return $p['peer_view_fields'];
+
+        // Anyone under a peer VP
+        $stmt = $pdo->prepare("
+            SELECT w.employee_id
+            FROM workforce w
+            JOIN workforce vp ON vp.employee_id = w.vp_id
+            JOIN workforce me ON me.employee_id  = ?
+            WHERE w.employee_id = ?
+              AND vp.role = 'VP'
+              AND vp.svp_id IS NOT NULL
+              AND me.svp_id IS NOT NULL
+              AND vp.svp_id = me.svp_id
+        ");
+        $stmt->execute([$myId, $targetId]);
+        if ($stmt->fetch()) return $p['peer_view_fields'];
+    }
+
     // Director peer check: other directors under same VP
     if ($myRole === 'director') {
         $stmt = $pdo->prepare("
@@ -107,7 +139,7 @@ function getViewLevel($myRole, $myId, $targetId, $pdo) {
         if ($stmt->fetch()) return $p['peer_view_fields'];
     }
 
-    // Manager peer check: others under same director
+    // Manager peer check: other managers + their employees under same director
     if ($myRole === 'manager') {
         $stmt = $pdo->prepare("
             SELECT w.employee_id
@@ -161,27 +193,38 @@ function getScopeClause($myRole, $myId, $pdo) {
         return ['sql' => 'w.employee_id = :scope_self', 'params' => [':scope_self' => $myId]];
     }
 
-    // Directors: own chain + peer directors under same VP
+    // Directors: own chain + peer directors + everyone under peer directors
     if ($myRole === 'director') {
         return [
             'sql' => "(
                 w.employee_id = :scope_self
                 OR w.director_id = :scope_dir
                 OR (
+                    w.vp_id IS NOT NULL
+                    AND w.vp_id = (SELECT vp_id FROM workforce WHERE employee_id = :scope_vp_lookup)
+                    AND w.director_id IN (
+                        SELECT employee_id FROM workforce
+                        WHERE role = 'Director'
+                        AND vp_id = (SELECT vp_id FROM workforce WHERE employee_id = :scope_vp_lookup2)
+                    )
+                )
+                OR (
                     w.role = 'Director'
                     AND w.vp_id IS NOT NULL
-                    AND w.vp_id = (SELECT vp_id FROM workforce WHERE employee_id = :scope_vp_lookup)
+                    AND w.vp_id = (SELECT vp_id FROM workforce WHERE employee_id = :scope_vp_lookup3)
                 )
             )",
             'params' => [
-                ':scope_self'      => $myId,
-                ':scope_dir'       => $myId,
-                ':scope_vp_lookup' => $myId,
+                ':scope_self'       => $myId,
+                ':scope_dir'        => $myId,
+                ':scope_vp_lookup'  => $myId,
+                ':scope_vp_lookup2' => $myId,
+                ':scope_vp_lookup3' => $myId,
             ],
         ];
     }
 
-    // Managers: own chain + peers under same director
+    // Managers: own chain + all people under same director (including other managers and their employees)
     if ($myRole === 'manager') {
         return [
             'sql' => "(
@@ -200,7 +243,38 @@ function getScopeClause($myRole, $myId, $pdo) {
         ];
     }
 
-    // VP / SVP: everyone in their chain + themselves
+    // VP: own chain + peer VPs under same SVP + everyone under those VPs
+    if ($myRole === 'vp') {
+        return [
+            'sql' => "(
+                w.employee_id = :scope_self
+                OR w.vp_id = :scope_vp
+                OR (
+                    w.svp_id IS NOT NULL
+                    AND w.svp_id = (SELECT svp_id FROM workforce WHERE employee_id = :scope_svp_lookup)
+                    AND w.vp_id IN (
+                        SELECT employee_id FROM workforce
+                        WHERE role = 'VP'
+                        AND svp_id = (SELECT svp_id FROM workforce WHERE employee_id = :scope_svp_lookup2)
+                    )
+                )
+                OR (
+                    w.role = 'VP'
+                    AND w.svp_id IS NOT NULL
+                    AND w.svp_id = (SELECT svp_id FROM workforce WHERE employee_id = :scope_svp_lookup3)
+                )
+            )",
+            'params' => [
+                ':scope_self'        => $myId,
+                ':scope_vp'          => $myId,
+                ':scope_svp_lookup'  => $myId,
+                ':scope_svp_lookup2' => $myId,
+                ':scope_svp_lookup3' => $myId,
+            ],
+        ];
+    }
+
+    // SVP: everyone in their chain + themselves
     return [
         'sql'    => "(w.$chainCol = :scope_id OR w.employee_id = :scope_self)",
         'params' => [':scope_id' => $myId, ':scope_self' => $myId],
