@@ -323,18 +323,7 @@ $total = array_sum($stateData);
 </head>
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
-  <div class="site-header">
-    <div class="orange-bar"></div>
-    <span class="page-title">Employee Map</span>
-    <div class="nav-divider"></div>
-    <nav>
-      <a href="employee_search.php">Employee Search</a>
-      <a href="employee_map.php" class="active">Maps</a>
-      <a href="events.php">Events</a>
-      <a href="Fdrill.php">Drill Down</a>
-      <a href="Frequest.php">Update Request</a>
-    </nav>
-  </div>
+<?php $activePage = 'map'; include __DIR__ . '/navbar.php'; ?>
 
   <div class="page-subheader">
     <p>Live data from <strong>dashboard_prod</strong> &mdash; <strong><?= $total ?></strong> employees across <strong><?= count($stateData) ?></strong> states</p>
