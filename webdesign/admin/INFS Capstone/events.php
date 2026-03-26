@@ -1,8 +1,11 @@
 <?php
-// events.php
-// Displays a monthly calendar with employee birthdays (purple) and anniversaries (orange)
-// pulled live from the database
-
+session_start();
+if (!isset($_SESSION['authorized'])) {
+    session_destroy();
+    header("Location: FEDEXHR.php");
+    exit();
+}
+// employee_map.php
 require_once __DIR__ . '/db_config.php';
 
 // ── Month navigation ──────────────────────────────────────────────────────────
@@ -423,15 +426,7 @@ foreach ($anniversaryRows as $r) {
   <div class="site-header">
     <div class="orange-bar"></div>
     <span class="page-title">Events</span>
-    <div class="nav-divider"></div>
-    <nav>
-      <a href="employee_search.php">Employee Search</a>
-      <a href="employee_map.php">Maps</a>
-      <a href="events.php" class="active">Events</a>
-      <a href="Fdrill.php">Drill Down</a>
-      <a href="Frequest.php">Update Request</a>
-    </nav>
-  </div>
+<?php $activePage = 'events'; include __DIR__ . '/navbar.php'; ?>
 
   <div class="cal-wrapper">
 
