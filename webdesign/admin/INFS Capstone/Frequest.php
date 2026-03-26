@@ -151,6 +151,10 @@ if (!isset($_SESSION['authorized'])) {
       margin-bottom: 15px;
       color: #ddd;
     }
+      .site-header {
+  align-self: stretch !important;
+  width: 100% !important;
+}
 
     textarea {
       resize: none;
