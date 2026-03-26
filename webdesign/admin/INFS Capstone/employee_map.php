@@ -1,7 +1,11 @@
 <?php
+session_start();
+if (!isset($_SESSION['authorized'])) {
+    session_destroy();
+    header("Location: FEDEXHR.php");
+    exit();
+}
 // employee_map.php
-// Queries the DB directly and injects state headcount into the map JS
-
 require_once __DIR__ . '/db_config.php';
 
 // Pull employee count per state live from the database
