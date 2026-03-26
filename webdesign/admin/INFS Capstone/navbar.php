@@ -26,6 +26,7 @@ $activePage  = $activePage ?? '';
     background-color: #4D148C;
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 0 24px;
     gap: 0;
     min-height: 56px;
@@ -88,9 +89,6 @@ $activePage  = $activePage ?? '';
     display: flex;
     align-items: center;
     gap: 0;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   .site-header nav a {
@@ -115,7 +113,8 @@ $activePage  = $activePage ?? '';
   }
 
   .site-header .nav-logout {
-    margin-left: auto;
+    position: absolute;
+    right: 24px;
     color: rgba(255,255,255,0.6);
     text-decoration: none;
     font-size: 12px;
