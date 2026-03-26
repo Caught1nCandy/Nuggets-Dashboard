@@ -277,81 +277,6 @@ ON DUPLICATE KEY UPDATE
   svp_id      = VALUES(svp_id);
 
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ============================================================
--- 4) Populate LOGIN
---    Username  = employee_id (as agreed)
---    Password  = SHA2 hash of employee_id as a placeholder.
---                In production your PHP registration flow
---                should replace this with a proper bcrypt hash
---                via password_hash().
--- ============================================================
-INSERT INTO login (username, password, employee_id)
-SELECT
-  employee_id,
-  SHA2(employee_id, 256) AS password,   -- placeholder — replace with bcrypt in PHP
-  employee_id
-FROM workforce
-ON DUPLICATE KEY UPDATE
-  username    = VALUES(username),
-  employee_id = VALUES(employee_id);
-  -- intentionally NOT updating password so existing passwords survive re-seeding
-
--- ============================================================
--- 5) Diagnostics
--- ============================================================
-
--- 5a) Row counts across all tables
-SELECT
-  (SELECT COUNT(*) FROM staging_workforce) AS staging_rows,
-  (SELECT COUNT(*) FROM organization)      AS org_rows,
-  (SELECT COUNT(*) FROM location)          AS location_rows,
-  (SELECT COUNT(*) FROM job)               AS job_rows,
-  (SELECT COUNT(*) FROM workforce)         AS workforce_rows,
-  (SELECT COUNT(*) FROM login)             AS login_rows;
-
--- 5b) Any employees whose org or location didn't resolve
---     (these will show NULL org_id or location_id in workforce)
-SELECT COUNT(*) AS missing_org_id
-FROM workforce
-WHERE org_id IS NULL;
-
-SELECT COUNT(*) AS missing_location_id
-FROM workforce
-WHERE location_id IS NULL;
-
--- 5c) Unresolved hierarchy pointers (ideally all zero after FK checks back on)
-SELECT COUNT(*) AS unresolved_hierarchy_refs
-FROM workforce w
-LEFT JOIN workforce mgr ON mgr.employee_id = w.manager_id
-LEFT JOIN workforce dir ON dir.employee_id = w.director_id
-LEFT JOIN workforce vp  ON vp.employee_id  = w.vp_id
-LEFT JOIN workforce svp ON svp.employee_id = w.svp_id
-WHERE (w.manager_id  IS NOT NULL AND mgr.employee_id IS NULL)
-   OR (w.director_id IS NOT NULL AND dir.employee_id IS NULL)
-   OR (w.vp_id       IS NOT NULL AND vp.employee_id  IS NULL)
-   OR (w.svp_id      IS NOT NULL AND svp.employee_id IS NULL);
-
--- 5d) Date parse failures (staging had a value but workforce got NULL)
-SELECT
-  s.employee_id_raw,
-  s.anniversary_raw, w.anniversary,
-  s.birthday_raw,    w.birthday
-FROM staging_workforce s
-JOIN workforce w ON w.employee_id = TRIM(s.employee_id_raw)
-WHERE (NULLIF(TRIM(s.anniversary_raw), '') IS NOT NULL AND w.anniversary IS NULL)
-   OR (NULLIF(TRIM(s.birthday_raw),    '') IS NOT NULL AND w.birthday    IS NULL)
-LIMIT 50;
-
--- 5e) Duplicate employee IDs in staging (merged by ON DUPLICATE KEY UPDATE)
-SELECT TRIM(employee_id_raw) AS employee_id, COUNT(*) AS cnt
-FROM staging_workforce
-WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
-GROUP BY TRIM(employee_id_raw)
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 20;
-
 -- ============================================================
 -- Login passwords — appended to seed.sql
 -- Safe to run multiple times (ON DUPLICATE KEY UPDATE)
@@ -630,3 +555,56 @@ VALUES
   ('3252689', '126651714fec77790d3e61ed1f1130ad7ebc865d966378808f27d5a7f5e52544', '3252689')
 ON DUPLICATE KEY UPDATE
   password = VALUES(password);
+
+-- 5a) Row counts across all tables
+SELECT
+  (SELECT COUNT(*) FROM staging_workforce) AS staging_rows,
+  (SELECT COUNT(*) FROM organization)      AS org_rows,
+  (SELECT COUNT(*) FROM location)          AS location_rows,
+  (SELECT COUNT(*) FROM job)               AS job_rows,
+  (SELECT COUNT(*) FROM workforce)         AS workforce_rows,
+  (SELECT COUNT(*) FROM login)             AS login_rows;
+
+-- 5b) Any employees whose org or location didn't resolve
+--     (these will show NULL org_id or location_id in workforce)
+SELECT COUNT(*) AS missing_org_id
+FROM workforce
+WHERE org_id IS NULL;
+
+SELECT COUNT(*) AS missing_location_id
+FROM workforce
+WHERE location_id IS NULL;
+
+-- 5c) Unresolved hierarchy pointers (ideally all zero after FK checks back on)
+SELECT COUNT(*) AS unresolved_hierarchy_refs
+FROM workforce w
+LEFT JOIN workforce mgr ON mgr.employee_id = w.manager_id
+LEFT JOIN workforce dir ON dir.employee_id = w.director_id
+LEFT JOIN workforce vp  ON vp.employee_id  = w.vp_id
+LEFT JOIN workforce svp ON svp.employee_id = w.svp_id
+WHERE (w.manager_id  IS NOT NULL AND mgr.employee_id IS NULL)
+   OR (w.director_id IS NOT NULL AND dir.employee_id IS NULL)
+   OR (w.vp_id       IS NOT NULL AND vp.employee_id  IS NULL)
+   OR (w.svp_id      IS NOT NULL AND svp.employee_id IS NULL);
+
+-- 5d) Date parse failures (staging had a value but workforce got NULL)
+SELECT
+  s.employee_id_raw,
+  s.anniversary_raw, w.anniversary,
+  s.birthday_raw,    w.birthday
+FROM staging_workforce s
+JOIN workforce w ON w.employee_id = TRIM(s.employee_id_raw)
+WHERE (NULLIF(TRIM(s.anniversary_raw), '') IS NOT NULL AND w.anniversary IS NULL)
+   OR (NULLIF(TRIM(s.birthday_raw),    '') IS NOT NULL AND w.birthday    IS NULL)
+LIMIT 50;
+
+-- 5e) Duplicate employee IDs in staging (merged by ON DUPLICATE KEY UPDATE)
+SELECT TRIM(employee_id_raw) AS employee_id, COUNT(*) AS cnt
+FROM staging_workforce
+WHERE NULLIF(TRIM(employee_id_raw), '') IS NOT NULL
+GROUP BY TRIM(employee_id_raw)
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 20;
+
+
