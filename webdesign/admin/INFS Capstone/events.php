@@ -424,9 +424,6 @@ foreach ($anniversaryRows as $r) {
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
 <?php $activePage = 'events'; include __DIR__ . '/navbar.php'; ?>
-  <div class="site-header">
-    <div class="orange-bar"></div>
-    <span class="page-title">Events</span>
 
 
   <div class="cal-wrapper">
