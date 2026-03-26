@@ -30,6 +30,7 @@ $activePage  = $activePage ?? '';
     gap: 0;
     min-height: 56px;
     box-sizing: border-box;
+    position: relative;
   }
 
   .site-header .nav-user {
@@ -87,6 +88,9 @@ $activePage  = $activePage ?? '';
     display: flex;
     align-items: center;
     gap: 0;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .site-header nav a {
