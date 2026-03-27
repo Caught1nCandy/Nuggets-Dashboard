@@ -29,3 +29,6 @@ admin/update_button.html
 admin/apply_schema_safe.php
 admin/_secrets.php
 config/
+
+# API and Openclaw Stuff
+config/api_config.php
