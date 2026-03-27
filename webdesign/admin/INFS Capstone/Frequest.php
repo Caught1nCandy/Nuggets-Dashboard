@@ -34,9 +34,12 @@ if (!isset($_SESSION['authorized'])) {
       background-attachment: fixed;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
     }
-
+    
+.form-container {
+  align-self: center;
+}
     /* ── Combined header + navbar ── */
     .site-header {
       width: 100%;
