@@ -29,6 +29,11 @@ admin/update_button.html
 admin/apply_schema_safe.php
 admin/_secrets.php
 config/
+<<<<<<< HEAD
 config/api_config.php
 webdesign/admin/INFS Capstone/config/api_config.php
 webdesign/admin/INFS Capstone/config/api_config.php
+=======
+
+# API and Openclaw Stuff
+config/api_config.php

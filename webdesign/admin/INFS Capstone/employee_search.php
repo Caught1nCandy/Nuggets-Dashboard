@@ -1,0 +1,993 @@
+<?php
+session_start();
+if (!isset($_SESSION['authorized'])) {
+    session_destroy();
+    header("Location: FEDEXHR.php");
+    exit();
+}
+
+require_once __DIR__ . '/db_config.php';
+
+// Only load filter dropdowns for roles that can actually use them
+// Employees see only themselves so filters are irrelevant
+$showFilters = !in_array($_SESSION['role'], ['employee']);
+
+$locations = $showFilters ? $pdo->query("
+    SELECT DISTINCT work_city, state
+    FROM location
+    ORDER BY work_city
+")->fetchAll() : [];
+
+$orgs = $showFilters ? $pdo->query("
+    SELECT org_id, organization_name
+    FROM organization
+    ORDER BY organization_name
+")->fetchAll() : [];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Employee Search — Workforce Dashboard</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --purple: #4D148C;
+      --orange: #FF6200;
+      --bg:     #f4f4f4;
+      --surface:#ffffff;
+      --border: #e0e0e0;
+      --text:   #1a1a1a;
+      --muted:  #888888;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Open Sans', sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-bottom: 60px;
+    }
+
+    /* ── Combined header + navbar ── */
+    .site-header {
+      width: 100%;
+      align-self: stretch;
+      background-color: #4D148C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      gap: 16px;
+      min-height: 56px;
+    }
+
+    .site-header .orange-bar {
+      width: 4px;
+      height: 28px;
+      background: var(--orange);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .site-header .page-title {
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'Open Sans', sans-serif;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .site-header .nav-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.25);
+      flex-shrink: 0;
+    }
+
+    .site-header nav {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .site-header nav a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 14px;
+      font-family: 'Open Sans', sans-serif;
+      font-weight: 600;
+      padding: 18px 16px;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .site-header nav a:hover {
+      background-color: rgba(255,255,255,0.12);
+      color: #ffffff;
+    }
+
+    .site-header nav a.active {
+      color: #ffffff;
+      border-bottom: 3px solid var(--orange);
+    }
+
+    /* ── Main layout ── */
+    .search-wrapper {
+      width: 100%;
+      max-width: 1000px;
+      padding: 32px 24px 0;
+    }
+
+    /* ── Search bar row ── */
+    .search-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .search-input-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    .search-input-wrap .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    #search-input {
+      width: 100%;
+      padding: 14px 14px 14px 42px;
+      border: 2px solid var(--purple);
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: 'Open Sans', sans-serif;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      transition: box-shadow 0.15s;
+    }
+
+    #search-input:focus {
+      box-shadow: 0 0 0 3px rgba(77,20,140,0.15);
+    }
+
+    #search-input::placeholder { color: var(--muted); }
+
+    /* ── Filters panel ── */
+    .filters-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      position: relative;
+    }
+
+    .filters-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: 10px 10px 0 0;
+      background: linear-gradient(90deg, var(--purple), var(--orange));
+    }
+
+    .filters-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .filter-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 5px;
+    }
+
+    .filter-group select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'Open Sans', sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .filter-group select:focus {
+      border-color: var(--purple);
+    }
+
+    .filter-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    .clear-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-size: 12px;
+      font-family: 'Open Sans', sans-serif;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .clear-btn:hover {
+      border-color: var(--purple);
+      color: var(--purple);
+    }
+
+    /* ── Results area ── */
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      min-height: 20px;
+    }
+
+    .results-count {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .results-count strong { color: var(--purple); }
+
+    /* ── Result cards ── */
+    #results-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+
+    .result-card:hover {
+      border-color: var(--purple);
+      box-shadow: 0 3px 12px rgba(77,20,140,0.1);
+    }
+
+    /* Dimmed style for name-only cards */
+    .result-card.restricted {
+      opacity: 0.75;
+    }
+
+    .role-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .role-badge.Employee  { background: #ede0f8; color: var(--purple); }
+    .role-badge.Manager   { background: #fff0e6; color: var(--orange); }
+    .role-badge.Director  { background: #e6f0ff; color: #1a56c4; }
+    .role-badge.VP        { background: #e6faf0; color: #1a7a4a; }
+    .role-badge.SVP       { background: #fff8e6; color: #b07000; }
+
+    .result-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-name mark {
+      background: #ede0f8;
+      color: var(--purple);
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    .result-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-meta span { margin-right: 12px; }
+
+    /* Lock label shown on name-only cards instead of meta */
+    .result-restricted-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-style: italic;
+    }
+
+    .result-arrow {
+      color: var(--purple);
+      font-size: 18px;
+      flex-shrink: 0;
+      opacity: 0.4;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+
+    .result-card:hover .result-arrow {
+      opacity: 1;
+      transform: translateX(3px);
+    }
+
+    /* ── Empty / loading states ── */
+    .state-msg {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .state-msg .big { font-size: 32px; margin-bottom: 8px; }
+
+    /* ── Employee detail modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 0;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      overflow: hidden;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-top {
+      background: var(--purple);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .modal-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .modal-top-info h2 {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .modal-top-info p {
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+
+    .modal-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.7);
+      font-size: 22px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+      align-self: flex-start;
+    }
+
+    .modal-close:hover { color: #fff; }
+
+    .modal-body {
+      padding: 20px 24px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Notice bar shown inside modal for restricted employees */
+    .modal-restricted-notice {
+      background: #f8f4ff;
+      border: 1px solid #ddd0f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      font-style: italic;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .detail-item label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    .detail-item span {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+
+    /* ── Subordinates list inside modal ── */
+    .subordinates-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+
+    .subordinates-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .subordinate-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border: 1px solid transparent;
+    }
+
+    .subordinate-row:hover {
+      background: #f4f0fb;
+      border-color: #ddd0f0;
+    }
+
+    .subordinate-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+
+    .subordinate-badge.Employee  { background: #ede0f8; color: var(--purple); }
+    .subordinate-badge.Manager   { background: #fff0e6; color: var(--orange); }
+    .subordinate-badge.Director  { background: #e6f0ff; color: #1a56c4; }
+    .subordinate-badge.VP        { background: #e6faf0; color: #1a7a4a; }
+    .subordinate-badge.SVP       { background: #fff8e6; color: #b07000; }
+
+    .subordinate-info { flex: 1; min-width: 0; }
+
+    .subordinate-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .subordinate-meta  { font-size: 11px; color: var(--muted); }
+    .subordinate-lock  { font-size: 11px; color: var(--muted); font-style: italic; }
+
+    .subordinate-arrow {
+      color: var(--purple);
+      font-size: 14px;
+      opacity: 0.4;
+    }
+
+    .subordinate-row:hover .subordinate-arrow { opacity: 1; }
+
+    /* ── Modal back button ── */
+    .modal-back {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 13px;
+      font-family: 'Open Sans', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .modal-back:hover { color: #fff; }
+
+    .modal-loading {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 600px) {
+      .filters-grid { grid-template-columns: 1fr; }
+      .detail-grid  { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<?php include __DIR__ . '/impersonation_banner.php'; ?>
+
+<?php $activePage = 'search'; include __DIR__ . '/navbar.php'; ?>
+
+<div class="search-wrapper">
+
+  <div class="search-row">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Begin typing a name, role, or employee ID..."
+        autocomplete="off"
+      />
+    </div>
+  </div>
+
+  <?php if ($showFilters): ?>
+  <div class="filters-card">
+    <div class="filters-title">&#9776;&nbsp; Filter by</div>
+    <div class="filters-grid">
+
+      <div class="filter-group">
+        <label>Role</label>
+        <select id="filter-role">
+          <option value="">All roles</option>
+          <option value="Employee">Employee</option>
+          <option value="Manager">Manager</option>
+          <option value="Director">Director</option>
+          <option value="VP">VP</option>
+          <option value="SVP">SVP</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Location</label>
+        <select id="filter-location">
+          <option value="">All locations</option>
+          <?php foreach ($locations as $loc): ?>
+            <option value="<?= htmlspecialchars($loc['work_city']) ?>">
+              <?= htmlspecialchars($loc['work_city']) ?>, <?= htmlspecialchars($loc['state']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Department</label>
+        <select id="filter-org">
+          <option value="">All departments</option>
+          <?php foreach ($orgs as $org): ?>
+            <option value="<?= htmlspecialchars($org['org_id']) ?>">
+              <?= htmlspecialchars($org['organization_name']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+    </div>
+    <div class="filter-actions">
+      <button class="clear-btn" onclick="clearFilters()">Clear filters</button>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <div class="results-header">
+    <div class="results-count" id="results-count"></div>
+  </div>
+
+  <div id="results-list">
+    <div class="state-msg">
+      <div class="big">&#128269;</div>
+      Start typing to search employees
+    </div>
+  </div>
+
+</div>
+
+<!-- Employee detail modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-top" id="modal-top">
+      <button class="modal-back" id="modal-back" onclick="modalGoBack()" style="display:none;">&#8592; Back</button>
+      <div class="modal-avatar" id="modal-avatar"></div>
+      <div class="modal-top-info">
+        <h2 id="modal-name"></h2>
+        <p id="modal-title-role"></p>
+      </div>
+      <button class="modal-close" onclick="closeModalDirect()">&#215;</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div class="modal-loading">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const userRole     = <?= json_encode($_SESSION['role']) ?>;
+const myEmployeeId = <?= json_encode($_SESSION['employee_id']) ?>;
+
+const searchInput  = document.getElementById('search-input');
+const resultsList  = document.getElementById('results-list');
+const resultsCount = document.getElementById('results-count');
+
+// Stack of employee IDs for back navigation inside modal
+let modalStack = [];
+
+let debounceTimer = null;
+
+// ── Helpers ────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlight(text, query) {
+  if (!query) return escHtml(text);
+  const escaped = escHtml(text);
+  const re = new RegExp('(' + escRe(query) + ')', 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+
+function roleInitials(role) {
+  if (!role) return '?';
+  const map = { Employee:'EMP', Manager:'MGR', Director:'DIR', VP:'VP', SVP:'SVP' };
+  return map[role] || role.substring(0,3).toUpperCase();
+}
+
+function formatBirthday(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+
+function formatAnniversary(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// ── Search ─────────────────────────────────────────────────
+
+function fetchResults() {
+  const q        = searchInput.value.trim();
+  const location = document.getElementById('filter-location') ? document.getElementById('filter-location').value : '';
+  const org      = document.getElementById('filter-org')      ? document.getElementById('filter-org').value      : '';
+  const role     = document.getElementById('filter-role')     ? document.getElementById('filter-role').value     : '';
+
+  if (!q && !location && !org && !role) {
+    resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128269;</div>Start typing to search employees</div>`;
+    resultsCount.innerHTML = '';
+    return;
+  }
+
+  resultsList.innerHTML = `<div class="state-msg">Searching...</div>`;
+
+  fetch('search_api.php?' + new URLSearchParams({ q, location, org, role }).toString())
+    .then(r => r.json())
+    .then(data => renderResults(data, q))
+    .catch(() => {
+      resultsList.innerHTML = `<div class="state-msg">Error contacting server. Please try again.</div>`;
+    });
+}
+
+function renderResults(data, query) {
+  if (data.length === 0) {
+    resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128566;</div>No employees found</div>`;
+    resultsCount.innerHTML = '';
+    return;
+  }
+
+  resultsCount.innerHTML = `Showing <strong>${data.length}</strong> result${data.length !== 1 ? 's' : ''}`;
+
+  resultsList.innerHTML = data.map(emp => {
+    const fullName   = emp.first_name + ' ' + emp.last_name;
+    const role       = emp.role || 'Employee';
+    const initials   = roleInitials(role);
+    const restricted = emp.view_level === 'name_only';
+
+    if (!restricted) {
+      const loc    = emp.work_city && emp.state ? `${emp.work_city}, ${emp.state}` : '—';
+      const dept   = emp.organization_name || '—';
+      const title  = emp.title || '—';
+      const tenure = emp.tenure !== null ? emp.tenure + ' yr' + (emp.tenure !== 1 ? 's' : '') : '—';
+
+      return `
+        <div class="result-card" onclick="openModal('${escHtml(emp.employee_id)}')">
+          <div class="role-badge ${escHtml(role)}">${initials}</div>
+          <div class="result-info">
+            <div class="result-name">${highlight(fullName, query)}</div>
+            <div class="result-meta">
+              <span>&#128205; ${escHtml(loc)}</span>
+              <span>&#127970; ${escHtml(dept)}</span>
+              <span>&#128188; ${escHtml(title)}</span>
+              <span>&#8987; ${tenure}</span>
+            </div>
+          </div>
+          <div class="result-arrow">&#8250;</div>
+        </div>`;
+    }
+
+    return `
+      <div class="result-card restricted" onclick="openModal('${escHtml(emp.employee_id)}')">
+        <div class="role-badge ${escHtml(role)}">${initials}</div>
+        <div class="result-info">
+          <div class="result-name">${highlight(fullName, query)}</div>
+          <div class="result-restricted-label">&#128274; Limited visibility</div>
+        </div>
+        <div class="result-arrow">&#8250;</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Modal ──────────────────────────────────────────────────
+
+function openModal(employeeId) {
+  // Push to stack so back button can return
+  modalStack.push(employeeId);
+  document.getElementById('modal-back').style.display = modalStack.length > 1 ? 'flex' : 'none';
+
+  // Show overlay with loading state immediately
+  document.getElementById('modal-avatar').textContent = '...';
+  document.getElementById('modal-name').textContent   = 'Loading...';
+  document.getElementById('modal-title-role').textContent = '';
+  document.getElementById('modal-body').innerHTML     = '<div class="modal-loading">&#8987; Fetching details...</div>';
+  document.getElementById('modal-overlay').classList.add('open');
+
+  fetch('employee_detail_api.php?id=' + encodeURIComponent(employeeId))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('modal-body').innerHTML = `<div class="modal-loading">&#10060; ${escHtml(data.error)}</div>`;
+        return;
+      }
+      renderModal(data.employee, data.subordinates);
+    })
+    .catch(() => {
+      document.getElementById('modal-body').innerHTML = '<div class="modal-loading">Error loading employee details.</div>';
+    });
+}
+
+function renderModal(emp, subordinates) {
+  const role       = emp.role || 'Employee';
+  const fullName   = emp.first_name + ' ' + emp.last_name;
+  const restricted = emp.view_level === 'name_only';
+
+  document.getElementById('modal-avatar').textContent     = roleInitials(role);
+  document.getElementById('modal-name').textContent       = fullName;
+  document.getElementById('modal-title-role').textContent = (emp.title || role) + ' · ' + role;
+
+  let bodyHtml = '';
+
+  // Restricted notice
+  if (restricted) {
+    bodyHtml += `
+      <div class="modal-restricted-notice">
+        &#128274; Limited view: name, birthday, title, location and department only.
+      </div>`;
+  }
+
+  // Detail fields
+  let fields;
+  if (restricted) {
+    fields = [
+      { label: 'Birthday',   value: formatBirthday(emp.birthday) },
+      { label: 'Title',      value: emp.title             || '—' },
+      { label: 'Location',   value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+      { label: 'Department', value: emp.organization_name || '—' },
+    ];
+  } else {
+    fields = [
+      { label: 'Employee ID',  value: emp.employee_id },
+      { label: 'Department',   value: emp.organization_name || '—' },
+      { label: 'Title',        value: emp.title             || '—' },
+      { label: 'Job Type',     value: emp.job_type          || '—' },
+      { label: 'Pay Band',     value: emp.pay_band          || '—' },
+      { label: 'Location',     value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
+      { label: 'Tenure',       value: emp.tenure !== null ? emp.tenure + ' years' : '—' },
+      { label: 'Anniversary',  value: formatAnniversary(emp.anniversary) },
+      { label: 'Birthday',     value: formatBirthday(emp.birthday) },
+      { label: emp.manager_role ? (emp.manager_role.charAt(0).toUpperCase() + emp.manager_role.slice(1).toLowerCase()) : 'Reports To', value: emp.manager_first ? emp.manager_first + ' ' + emp.manager_last : '—' },
+    ];
+  }
+
+  bodyHtml += `<div class="detail-grid">` + fields.map(f => `
+    <div class="detail-item">
+      <label>${escHtml(f.label)}</label>
+      <span>${escHtml(String(f.value))}</span>
+    </div>`).join('') + `</div>`;
+
+  // Subordinates section
+  if (subordinates && subordinates.length > 0) {
+    bodyHtml += `
+      <div class="subordinates-section">
+        <div class="subordinates-title">&#128101; Direct Reports (${subordinates.length})</div>`;
+
+    subordinates.forEach(sub => {
+      const subRole       = sub.role || 'Employee';
+      const subName       = sub.first_name + ' ' + sub.last_name;
+      const subRestricted = sub.view_level === 'name_only';
+      const subTitle      = sub.title || subRole;
+      const subLoc        = sub.work_city && sub.state ? sub.work_city + ', ' + sub.state : '';
+
+      bodyHtml += `
+        <div class="subordinate-row" onclick="openModal('${escHtml(sub.employee_id)}')">
+          <div class="subordinate-badge ${escHtml(subRole)}">${roleInitials(subRole)}</div>
+          <div class="subordinate-info">
+            <div class="subordinate-name">${escHtml(subName)}</div>`;
+
+      if (subRestricted) {
+        bodyHtml += `<div class="subordinate-lock">&#128274; Limited view</div>`;
+      } else {
+        bodyHtml += `<div class="subordinate-meta">${escHtml(subTitle)}${subLoc ? ' · ' + escHtml(subLoc) : ''}</div>`;
+      }
+
+      bodyHtml += `
+          </div>
+          <div class="subordinate-arrow">&#8250;</div>
+        </div>`;
+    });
+
+    bodyHtml += `</div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = bodyHtml;
+}
+
+function modalGoBack() {
+  // Pop current, re-open previous
+  modalStack.pop();
+  const prevId = modalStack.pop(); // openModal will re-push it
+  if (prevId) {
+    openModal(prevId);
+  } else {
+    closeModalDirect();
+  }
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  modalStack = [];
+  document.getElementById('modal-back').style.display = 'none';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModalDirect();
+});
+
+// ── Search event listeners ─────────────────────────────────
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(fetchResults, 200);
+});
+
+['filter-location','filter-org','filter-role'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', fetchResults);
+});
+
+function clearFilters() {
+  ['filter-location','filter-org','filter-role'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  fetchResults();
+}
+</script>
+
+</body>
+</html>

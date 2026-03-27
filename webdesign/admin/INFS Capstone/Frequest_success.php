@@ -1,17 +1,17 @@
 <?php
 session_start();
-if (!isset($_SESSION['authorized'])) {
-    session_destroy();
-    header("Location: FEDEXHR.php");
+if (!isset($_SESSION['data_request'])) {
+    echo "No request data found.";
     exit();
 }
+$data = $_SESSION['data_request'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Update Request — Workforce Dashboard</title>
+  <title>Request Submitted — Workforce Dashboard</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
 
@@ -27,7 +27,7 @@ if (!isset($_SESSION['authorized'])) {
       margin: 0;
       padding: 0;
       font-family: 'Open Sans', sans-serif;
-      background-image: url('fimg/tarmac.jpg');
+      background-image: url('fimg/closeup.jpg');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -36,10 +36,10 @@ if (!isset($_SESSION['authorized'])) {
       flex-direction: column;
       align-items: stretch;
     }
-    
-.form-container {
+      .form-container {
   align-self: center;
 }
+
     /* ── Combined header + navbar ── */
     .site-header {
       width: 100%;
@@ -103,103 +103,59 @@ if (!isset($_SESSION['authorized'])) {
       border-bottom: 3px solid var(--orange);
     }
 
-    /* ── Form styles ── */
-    .form-container {
+    /* ── Success box ── */
+    .box {
       background-color: var(--purple);
+      color: white;
       width: 400px;
-      margin: 80px auto;
+      margin: 100px auto;
       padding: 30px;
       border-radius: 20px;
-      color: white;
-      text-align: left;
+      font-family: 'Open Sans', sans-serif;
     }
 
-    .form-container h1 {
-      text-align: center;
+    .box h2 {
       margin-bottom: 20px;
-      font-family: 'Open Sans', sans-serif;
     }
 
-    .form-container input,
-    .form-container textarea,
-    .form-container select {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0 20px 0;
+    .box p {
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .box button {
+      margin: 10px 10px 0 0;
+      padding: 10px 20px;
       border: none;
-      border-radius: 5px;
-      font-family: 'Open Sans', sans-serif;
-    }
-
-    .form-container button {
-      width: 100%;
-      padding: 12px;
       background-color: white;
       color: var(--purple);
-      border: none;
-      border-radius: 5px;
       font-weight: bold;
       font-family: 'Open Sans', sans-serif;
+      border-radius: 5px;
       cursor: pointer;
     }
 
-    .form-container button:hover {
+    .box button:hover {
       background-color: #ddd;
-    }
-
-    #charCount {
-      text-align: right;
-      font-size: 12px;
-      margin-top: -15px;
-      margin-bottom: 15px;
-      color: #ddd;
-    }
-      .site-header {
-  align-self: stretch !important;
-  width: 100% !important;
-}
-
-    textarea {
-      resize: none;
-      overflow-y: auto;
-      height: 120px;
     }
   </style>
 </head>
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
 <?php $activePage = 'request'; include __DIR__ . '/navbar.php'; ?>
-
-
-  <div class="form-container">
-    <h1>Update Request</h1>
-    <form action="Frequest_handler.php" method="POST">
-      <label>Employee Name</label><br>
-      <input type="text" name="employee_name" maxlength="30" required><br>
-      <label>Employee ID</label><br>
-      <input type="text" name="employee_id" maxlength="10" required pattern="[0-9]*" oninput="this.value = this.value.replace(/[^0-9]/g, '')"><br>
-      <label>Reason for Update</label><br>
-      <select name="update_reason" required>
-        <option value="">-- Select Reason --</option>
-        <option value="Address Change">Address Change</option>
-        <option value="Promotion">Promotion</option>
-        <option value="Termination">Termination</option>
-        <option value="Department Transfer">Department Transfer</option>
-        <option value="Other">Other</option>
-      </select><br>
-      <label>Details</label><br>
-      <textarea name="details" rows="4" maxlength="500" required oninput="updateCounter(this)"></textarea>
-      <div id="charCount">0 / 500</div>
-      <button type="submit">Submit Request</button>
-    </form>
+/Fprivhome.php
+  <div class="box">/Fprivhome.php
+    <h2>Request Submitted</h2>
+    <p><b>Name: </b><?php echo $data['name']; ?></p>
+    <p><b>ID: </b><?php echo $data['id']; ?></p>
+    <p><b>Reason: </b><?php echo $data['reason']; ?></p>
+    <p><b>Details: </b><?php echo $data['details']; ?></p>
+    <br>
+    <a href="Frequest.php"><button>Submit Another Request</button></a>
+    <a href="Fprivhome.php"><button>Return to Home</button></a>
   </div>
 
-  <script>
-    function updateCounter(textarea) {
-      const counter = document.getElementById("charCount");
-      counter.textContent = textarea.value.length + " / 500";
-    }
-  </script>
+  <?php unset($_SESSION['data_request']); ?>
 
 </body>
 </html>

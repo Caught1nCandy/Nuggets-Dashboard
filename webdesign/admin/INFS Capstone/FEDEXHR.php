@@ -1,7 +1,7 @@
 <html> 
 <head> 
 
-<title> Fedex HR Login </title>
+<title> Dashboard Login</title>
 <link rel="stylesheet" href="Fedexlogin.css"> 
  
 </head> 
@@ -14,7 +14,7 @@
 
 
 
-<h3 style="color:white; font-size:50px;"> HR Login </h3>
+<h3 style="color:white; font-size:50px;"> Dashboard Login </h3>
 
 <form class="login" action="FHandler.php" method="post">    
   <input type="text" name="name" placeholder="Username"><br>
@@ -25,9 +25,7 @@
 
 
 <footer>
-  <p style="color:white;">
-  Put info here?  
-  </p>
+  
 </footer>
 
 
