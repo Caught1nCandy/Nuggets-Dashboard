@@ -25,7 +25,7 @@ header('Content-Type: application/json');
 // ── API key check ────────────────────────────────────────────
 // Change this to a strong random string and keep it secret.
 // OpenClaw must send this exact key or requests are rejected.
-define('OPENCLAW_API_KEY', 'REPLACE_WITH_STRONG_RANDOM_KEY');
+require_once __DIR__ . '/../config/api_config.php';
 
 // ── Only accept POST ─────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
