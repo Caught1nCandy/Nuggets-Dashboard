@@ -139,18 +139,7 @@ $data = $_SESSION['data_request'];
 </head>
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
-  <div class="site-header">
-    <div class="orange-bar"></div>
-    <span class="page-title">Request Submitted</span>
-    <div class="nav-divider"></div>
-    <nav>
-      <a href="employee_search.php">Employee Search</a>
-      <a href="employee_map.php">Maps</a>
-      <a href="events.php">Events</a>
-      <a href="Fdrill.php">Drill Down</a>
-      <a href="Frequest.php" class="active">Update Request</a>
-    </nav>
-  </div>
+<?php $activePage = 'request'; include __DIR__ . '/navbar.php'; ?>
 /Fprivhome.php
   <div class="box">/Fprivhome.php
     <h2>Request Submitted</h2>
