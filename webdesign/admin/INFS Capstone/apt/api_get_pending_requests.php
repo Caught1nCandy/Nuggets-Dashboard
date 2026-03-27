@@ -7,7 +7,7 @@
 
 header('Content-Type: application/json');
 
-define('OPENCLAW_API_KEY', 'REPLACE_WITH_STRONG_RANDOM_KEY');
+require_once __DIR__ . '/../config/api_config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
