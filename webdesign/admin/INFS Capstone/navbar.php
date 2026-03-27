@@ -18,6 +18,7 @@ $navPages = [
 // Sysadmin-only pages
 if (!empty($_SESSION['is_sysadmin'])) {
     $navPages['approval'] = ['label' => 'Request Approval', 'href' => 'request_approval.php'];
+}
 
 $displayName = htmlspecialchars(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
 $displayRole = htmlspecialchars(ucfirst($_SESSION['role'] ?? ''));
