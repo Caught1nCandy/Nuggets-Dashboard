@@ -34,8 +34,11 @@ $data = $_SESSION['data_request'];
       background-attachment: fixed;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
     }
+      .form-container {
+  align-self: center;
+}
 
     /* ── Combined header + navbar ── */
     .site-header {
