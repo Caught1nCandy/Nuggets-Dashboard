@@ -41,7 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // If VM is off, this times out silently after 3 seconds.
     // OpenClaw will pick it up on next boot via cron job.
     if (function_exists('curl_init')) {
-        $webhook_url = 'http://' . OPENCLAW_TAILSCALE_IP . ':' . OPENCLAW_PORT . '/webhook/new-request';
+        $webhook_url = 'http://' . OPENCLAW_TAILSCALE_IP . ':18791/webhook/new-request';
         $payload = json_encode([
             'event'      => 'new_update_request',
             'request_id' => $new_request_id,
