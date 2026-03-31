@@ -143,7 +143,6 @@ $data = $_SESSION['data_request'];
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
 <?php $activePage = 'request'; include __DIR__ . '/navbar.php'; ?>
-/Fprivhome.php
   <div class="box">/Fprivhome.php
     <h2>Request Submitted</h2>
     <p><b>Name: </b><?php echo $data['name']; ?></p>
