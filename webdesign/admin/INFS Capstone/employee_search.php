@@ -61,69 +61,7 @@ $orgs = $showFilters ? $pdo->query("
       padding-bottom: 60px;
     }
 
-    /* ── Combined header + navbar ── */
-    .site-header {
-      width: 100%;
-      align-self: stretch;
-      background-color: #4D148C;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 24px;
-      gap: 16px;
-      min-height: 56px;
-    }
-
-    .site-header .orange-bar {
-      width: 4px;
-      height: 28px;
-      background: var(--orange);
-      border-radius: 2px;
-      flex-shrink: 0;
-    }
-
-    .site-header .page-title {
-      color: #ffffff;
-      font-size: 18px;
-      font-weight: 700;
-      font-family: 'Open Sans', sans-serif;
-      white-space: nowrap;
-      margin-right: 8px;
-    }
-
-    .site-header .nav-divider {
-      width: 1px;
-      height: 20px;
-      background: rgba(255,255,255,0.25);
-      flex-shrink: 0;
-    }
-
-    .site-header nav {
-      display: flex;
-      align-items: center;
-      gap: 0;
-    }
-
-    .site-header nav a {
-      color: rgba(255,255,255,0.8);
-      text-decoration: none;
-      font-size: 14px;
-      font-family: 'Open Sans', sans-serif;
-      font-weight: 600;
-      padding: 18px 16px;
-      transition: background 0.15s, color 0.15s;
-      white-space: nowrap;
-    }
-
-    .site-header nav a:hover {
-      background-color: rgba(255,255,255,0.12);
-      color: #ffffff;
-    }
-
-    .site-header nav a.active {
-      color: #ffffff;
-      border-bottom: 3px solid var(--orange);
-    }
+    /* ── Navbar styles live in navbar.php ── */
 
     /* ── Main layout ── */
     .search-wrapper {
@@ -872,7 +810,7 @@ function renderModal(emp, subordinates) {
   if (restricted) {
     bodyHtml += `
       <div class="modal-restricted-notice">
-        &#128274; Limited view: name, birthday, title, location and department only.
+        &#128274; Limited view: name and role only.
       </div>`;
   }
 
@@ -880,10 +818,7 @@ function renderModal(emp, subordinates) {
   let fields;
   if (restricted) {
     fields = [
-      { label: 'Birthday',   value: formatBirthday(emp.birthday) },
-      { label: 'Title',      value: emp.title             || '—' },
-      { label: 'Location',   value: emp.work_city && emp.state ? emp.work_city + ', ' + emp.state : '—' },
-      { label: 'Department', value: emp.organization_name || '—' },
+      { label: 'Role', value: emp.role || '—' },
     ];
   } else {
     fields = [
