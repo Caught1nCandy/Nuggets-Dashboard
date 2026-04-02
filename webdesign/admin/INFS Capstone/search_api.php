@@ -61,16 +61,6 @@ if ($myRole === 'employee') {
     ";
     $params[':vl_self'] = $myId;
     $params[':vl_dir']  = $myId;
-} elseif ($myRole === 'vp') {
-    $viewLevelSQL = "
-        CASE
-            WHEN w.employee_id = :vl_self THEN 'full'
-            WHEN w.vp_id       = :vl_vp   THEN 'full'
-            ELSE 'name_only'
-        END
-    ";
-    $params[':vl_self'] = $myId;
-    $params[':vl_vp']   = $myId;
 } else {
     $viewLevelSQL = "'" . $p['view_fields'] . "'";
 }
@@ -141,6 +131,15 @@ $stmt = $pdo->prepare("
             WHEN w.director_id = :sort_dir  THEN 0
             WHEN w.manager_id  = :sort_mgr  THEN 0
             ELSE 1
+        END ASC,
+        -- Role hierarchy: SVP first, down to Employee
+        CASE w.role
+            WHEN 'SVP'      THEN 1
+            WHEN 'VP'       THEN 2
+            WHEN 'Director' THEN 3
+            WHEN 'Manager'  THEN 4
+            WHEN 'Employee' THEN 5
+            ELSE 6
         END ASC,
         w.last_name, w.first_name
     LIMIT 500
