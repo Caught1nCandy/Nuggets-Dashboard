@@ -7,18 +7,16 @@
 //
 // Remove the old site-header div from the page entirely.
 
-$navPages = [
-    'search'  => ['label' => 'Employee Search', 'href' => 'employee_search.php'],
-    'map'     => ['label' => 'Maps',             'href' => 'employee_map.php'],
-    'events'  => ['label' => 'Events',           'href' => 'events.php'],
-    'drill'   => ['label' => 'Drill Down',        'href' => 'Fdrill.php'],
-    'request' => ['label' => 'Update Request',   'href' => 'Frequest.php'],
-];
+$currentRole = $_SESSION['role'] ?? '';
 
-// Sysadmin-only pages
-if (!empty($_SESSION['is_sysadmin'])) {
-    $navPages['approval'] = ['label' => 'Request Approval', 'href' => 'request_approval.php'];
-}
+$navPages = [
+    'search'   => ['label' => 'Employee Search', 'href' => 'employee_search.php',  'roles' => ['all']],
+    'map'      => ['label' => 'Maps',             'href' => 'employee_map.php',     'roles' => ['all']],
+    'events'   => ['label' => 'Events',           'href' => 'events.php',           'roles' => ['all']],
+    'drill'    => ['label' => 'Drill Down',        'href' => 'Fdrill.php',           'roles' => ['all']],
+    'request'  => ['label' => 'Update Request',   'href' => 'Frequest.php',         'roles' => ['manager','director','vp','svp','sysadmin']],
+    'approval' => ['label' => 'Request Approval', 'href' => 'request_approval.php', 'roles' => ['sysadmin']],
+];
 
 $displayName = htmlspecialchars(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
 $displayRole = htmlspecialchars(ucfirst($_SESSION['role'] ?? ''));
@@ -153,7 +151,10 @@ $activePage  = $activePage ?? '';
 
   <!-- Nav links -->
   <nav>
-    <?php foreach ($navPages as $key => $page): ?>
+    <?php foreach ($navPages as $key => $page):
+        $allowed = $page['roles'] === ['all'] || in_array($currentRole, $page['roles']);
+        if (!$allowed) continue;
+    ?>
       <a href="<?php echo $page['href']; ?>"
          class="<?php echo $key === $activePage ? 'active' : ''; ?>">
         <?php echo $page['label']; ?>
