@@ -5,6 +5,11 @@ if (!isset($_SESSION['authorized'])) {
     header("Location: FEDEXHR.php");
     exit();
 }
+// Employees cannot submit update requests
+if ($_SESSION['role'] === 'employee') {
+    header("Location: employee_search.php");
+    exit();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
