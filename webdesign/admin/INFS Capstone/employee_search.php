@@ -817,8 +817,11 @@ function renderModal(emp, subordinates) {
   // Detail fields
   let fields;
   if (restricted) {
+    const reportsToLabel = emp.manager_role ? (emp.manager_role.charAt(0).toUpperCase() + emp.manager_role.slice(1).toLowerCase()) : 'Reports To';
+    const reportsToValue = emp.manager_first ? emp.manager_first + ' ' + emp.manager_last : '—';
     fields = [
-      { label: 'Role', value: emp.role || '—' },
+      { label: 'Role',       value: emp.role || '—' },
+      { label: reportsToLabel, value: reportsToValue },
     ];
   } else {
     fields = [
