@@ -33,7 +33,15 @@ $params = $scope['params'];
 // ── view_level SQL ──────────────────────────────────────────
 $p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
 
-if ($myRole === 'manager') {
+if ($myRole === 'employee') {
+    $viewLevelSQL = "
+        CASE
+            WHEN w.employee_id = :vl_self THEN 'full'
+            ELSE 'name_only'
+        END
+    ";
+    $params[':vl_self'] = $myId;
+} elseif ($myRole === 'manager') {
     $viewLevelSQL = "
         CASE
             WHEN w.employee_id = :vl_self THEN 'full'
