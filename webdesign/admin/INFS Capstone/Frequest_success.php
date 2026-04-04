@@ -143,7 +143,7 @@ $data = $_SESSION['data_request'];
 <body>
 <?php include __DIR__ . '/impersonation_banner.php'; ?>
 <?php $activePage = 'request'; include __DIR__ . '/navbar.php'; ?>
-  <div class="box">/Fprivhome.php
+  <div class="box">
     <h2>Request Submitted</h2>
     <p><b>Name: </b><?php echo $data['name']; ?></p>
     <p><b>ID: </b><?php echo $data['id']; ?></p>
@@ -151,7 +151,7 @@ $data = $_SESSION['data_request'];
     <p><b>Details: </b><?php echo $data['details']; ?></p>
     <br>
     <a href="Frequest.php"><button>Submit Another Request</button></a>
-    <a href="Fprivhome.php"><button>Return to Home</button></a>
+    <a href="employee_search.php"><button>Return to Home</button></a>
   </div>
 
   <?php unset($_SESSION['data_request']); ?>
