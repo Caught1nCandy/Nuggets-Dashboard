@@ -151,7 +151,7 @@ $data = $_SESSION['data_request'];
     <p><b>Details: </b><?php echo $data['details']; ?></p>
     <br>
     <a href="Frequest.php"><button>Submit Another Request</button></a>
-    <a href="employee_search.php"><button>Return to Home</button></a>
+    <a href="Fhome.php"><button>Return to Home</button></a>
   </div>
 
   <?php unset($_SESSION['data_request']); ?>
