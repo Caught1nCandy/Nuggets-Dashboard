@@ -8,11 +8,11 @@ if (!isset($_SESSION['authorized'])) {
 
 require_once __DIR__ . '/db_config.php';
 
-$myRole = $_SESSION['role'];
+$myRole = $_SESSION['role']; 
 $myId   = $_SESSION['employee_id'];
 
-// Specific Scope Logic 
-$dashWhere = "1=0";
+// Dashboard Specific Scope
+$dashWhere = "1=0"; 
 $dashParams = [];
 
 if ($myRole === 'svp') {
@@ -28,7 +28,7 @@ if ($myRole === 'svp') {
     $dashParams = [$myId];
 }
 
-// Fetch Personal Details 
+// Fetch Personal Details
 $stmt = $pdo->prepare("
     SELECT
         w.first_name, w.last_name, w.role, w.tenure, w.anniversary,
@@ -44,12 +44,13 @@ $stmt = $pdo->prepare("
 $stmt->execute([$myId]);
 $myDetails = $stmt->fetch();
 
-// Chart Data Variables 
+// Initialize Chart Data Variables
 $titleData = [];
 $payBandData = [];
 $roleData = [];
 $empPerMgrData = [];
 $deptData = [];
+$stateData = [];
 
 // Fetch Manager+ Data 
 if ($myRole !== 'employee') {
@@ -78,19 +79,23 @@ if ($myRole !== 'employee') {
     $stmt->execute($dashParams);
     $payBandData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    
+    // New State Distribution Data
+    $stmt = $pdo->prepare("SELECT l.state, COUNT(w.employee_id) as count FROM workforce w JOIN location l ON w.location_id = l.location_id WHERE $dashWhere AND l.state IS NOT NULL GROUP BY l.state");
+    $stmt->execute($dashParams);
+    $stateData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     if (in_array($myRole, ['vp', 'svp'])) {
         $stmt = $pdo->prepare("SELECT w.role, COUNT(w.employee_id) as count FROM workforce w WHERE $dashWhere GROUP BY w.role");
         $stmt->execute($dashParams);
         $roleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-	
+
     if (in_array($myRole, ['director', 'vp', 'svp'])) {
         $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name");
         $stmt->execute($dashParams);
         $deptData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-	
+
     if ($myRole === 'director') {
         $stmt = $pdo->prepare("
             SELECT CONCAT(mgr.first_name, ' ', mgr.last_name) as manager_name, COUNT(w.employee_id) as count 
@@ -123,30 +128,142 @@ if ($myRole !== 'employee') {
       --text:   #1a1a1a;
       --muted:  #888888;
     }
-    html, body { background: var(--bg); color: var(--text); font-family: 'Open Sans', sans-serif; min-height: 100vh; }
-    body { display: flex; flex-direction: column; align-items: center; padding-bottom: 60px; }
+    html, body {
+		background: var(--bg);
+		color: var(--text);
+		font-family: 'Open Sans', sans-serif;
+		min-height: 100vh;
+	}
+    body { display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding-bottom: 60px;
+	}
     
-    .dashboard-container { width: 100%; max-width: 1200px; padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
+    .dashboard-container {
+		width: 100%;
+		max-width: 1200px;
+		padding: 32px 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
     
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
-    .card-top-accent::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 10px 10px 0 0; background: linear-gradient(90deg, var(--purple), var(--orange)); }
-    .card-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 16px; }
+    .card {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 10px; padding: 24px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+		position: relative;
+	}
+    .card-top-accent::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 3px;
+		border-radius: 10px 10px 0 0;
+		background: linear-gradient(90deg, var(--purple), var(--orange));
+	}
+    .card-title {
+		font-size: 14px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--muted);
+		margin-bottom: 16px;
+	}
     
-    .snapshot-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-    .snapshot-avatar { width: 60px; height: 60px; border-radius: 12px; background: #ede0f8; color: var(--purple); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
-    .snapshot-name { font-size: 24px; font-weight: 700; color: var(--purple); }
-    .snapshot-role { font-size: 14px; color: var(--muted); }
-    .snapshot-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; background: #fcfcfc; padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
-    .detail-item label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-    .detail-item span { font-size: 14px; font-weight: 600; color: var(--text); }
+    .snapshot-header {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 16px;
+	}
+    .snapshot-avatar {
+		width: 60px;
+		height: 60px;
+		border-radius: 12px;
+		background: #ede0f8;
+		color: var(--purple);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 20px;
+		font-weight: 700;
+	}
+    .snapshot-name {
+		font-size: 24px;
+		font-weight: 700;
+		color: var(--purple);
+	}
+    .snapshot-role {
+		font-size: 14px;
+		color: var(--muted);
+	}
+    .snapshot-details {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 16px;
+		background: #fcfcfc;
+		padding: 16px;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+	}
+    .detail-item label {
+		display: block;
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--muted);
+		text-transform: uppercase;
+		margin-bottom: 4px;
+	}
+    .detail-item span {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--text);
+	}
     
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; border-bottom: 3px solid var(--purple); }
-    .kpi-value { font-size: 32px; font-weight: 700; color: var(--purple); margin-bottom: 4px; }
-    .kpi-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+    .kpi-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 16px;
+	}
+    .kpi-card {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 20px;
+		text-align: center;
+		border-bottom: 3px solid var(--purple);
+	}
+    .kpi-value {
+		font-size: 32px;
+		font-weight: 700;
+		color: var(--purple); margin-bottom: 4px;
+	}
+    .kpi-label {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--muted);
+		text-transform: uppercase;
+	}
     
-    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
-    .chart-container { position: relative; height: 280px; width: 100%; }
+    .chart-grid {
+		display: grid;
+		grid-template-columns:
+		repeat(auto-fit, minmax(400px, 1fr));
+		gap: 24px;
+		}
+    .chart-container {
+		position: relative;
+		width: 100%;
+	}
+    
+    .chart-tall { height: 400px; }
+    .chart-standard { height: 280px; }
+    .full-width { grid-column: 1 / -1; }
   </style>
 </head>
 <body>
@@ -178,10 +295,14 @@ if ($myRole !== 'employee') {
       <div class="kpi-value"><?= number_format($totalEmployees) ?></div>
       <div class="kpi-label">Total Employees</div>
     </div>
+    
+    <?php if ($myRole !== 'manager'): ?>
     <div class="kpi-card">
       <div class="kpi-value"><?= number_format($totalManagers) ?></div>
       <div class="kpi-label">Managers & Leaders</div>
     </div>
+    <?php endif; ?>
+
     <div class="kpi-card">
       <div class="kpi-value"><?= $avgTenure ?></div>
       <div class="kpi-label">Avg Tenure (Yrs)</div>
@@ -193,34 +314,40 @@ if ($myRole !== 'employee') {
   </div>
 
   <div class="chart-grid">
-    <div class="card">
+    
+    <div class="card full-width">
       <div class="card-title">Workforce by Job Title</div>
-      <div class="chart-container"><canvas id="titleChart"></canvas></div>
+      <div class="chart-container chart-tall"><canvas id="titleChart"></canvas></div>
     </div>
     
     <div class="card">
       <div class="card-title">Pay Band Distribution</div>
-      <div class="chart-container"><canvas id="payBandChart"></canvas></div>
+      <div class="chart-container chart-standard"><canvas id="payBandChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Employees by State</div>
+      <div class="chart-container chart-standard"><canvas id="stateChart"></canvas></div>
     </div>
 
     <?php if (in_array($myRole, ['vp', 'svp'])): ?>
     <div class="card">
       <div class="card-title">Workforce by Role</div>
-      <div class="chart-container"><canvas id="roleChart"></canvas></div>
+      <div class="chart-container chart-standard"><canvas id="roleChart"></canvas></div>
     </div>
     <?php endif; ?>
 
     <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
-    <div class="card" style="grid-column: 1 / -1;">
+    <div class="card">
       <div class="card-title">Employees by Department</div>
-      <div class="chart-container"><canvas id="deptChart"></canvas></div>
+      <div class="chart-container chart-standard"><canvas id="deptChart"></canvas></div>
     </div>
     <?php endif; ?>
 
     <?php if ($myRole === 'director'): ?>
-    <div class="card" style="grid-column: 1 / -1;">
+    <div class="card">
       <div class="card-title">Employees per Manager</div>
-      <div class="chart-container"><canvas id="empPerMgrChart"></canvas></div>
+      <div class="chart-container chart-standard"><canvas id="empPerMgrChart"></canvas></div>
     </div>
     <?php endif; ?>
 
@@ -230,11 +357,26 @@ if ($myRole !== 'employee') {
 </div>
 
 <script>
+// Department chart
 <?php if ($myRole !== 'employee'): ?>
   
   const brandPurple = '#4D148C';
   const brandOrange = '#FF6200';
-  const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000'];
+  const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000', '#2E0C54', '#FF9F66'];
+
+ 
+  const percentageTooltipConfig = {
+    callbacks: {
+      label: function(context) {
+        let label = context.label || '';
+        if (label) { label += ': '; }
+        let value = context.parsed;
+        let total = context.dataset.data.reduce((a, b) => a + b, 0);
+        let percentage = Math.round((value / total) * 100) + '%';
+        return label + value + ' (' + percentage + ')';
+      }
+    }
+  };
 
   const titleData = <?= json_encode($titleData) ?>;
   new Chart(document.getElementById('titleChart'), {
@@ -247,7 +389,14 @@ if ($myRole !== 'employee') {
         borderWidth: 0
       }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    options: { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { 
+            legend: { position: 'right' },
+            tooltip: percentageTooltipConfig
+        } 
+    }
   });
 
   const payBandData = <?= json_encode($payBandData) ?>;
@@ -265,6 +414,32 @@ if ($myRole !== 'employee') {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 
+  // State chart
+  const stateData = <?= json_encode($stateData) ?>;
+  new Chart(document.getElementById('stateChart'), {
+    type: 'polarArea',
+    data: {
+      labels: stateData.map(d => d.state || 'Unknown'),
+      datasets: [{
+        data: stateData.map(d => d.count),
+        backgroundColor: [
+            'rgba(77, 20, 140, 0.7)',
+            'rgba(255, 98, 0, 0.7)',
+            'rgba(26, 86, 196, 0.7)',
+            'rgba(0, 153, 102, 0.7)',
+            'rgba(204, 0, 0, 0.7)'
+        ],
+        borderWidth: 1
+      }]
+    },
+    options: { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { legend: { position: 'right' } } 
+    }
+  });
+
+// role chart
   <?php if (in_array($myRole, ['vp', 'svp'])): ?>
   const roleData = <?= json_encode($roleData) ?>;
   new Chart(document.getElementById('roleChart'), {
@@ -277,27 +452,42 @@ if ($myRole !== 'employee') {
         borderWidth: 0
       }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    options: { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { 
+            legend: { position: 'right' },
+            tooltip: percentageTooltipConfig
+        } 
+    }
   });
   <?php endif; ?>
 
+  // Department chart
   <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
   const deptData = <?= json_encode($deptData) ?>;
   new Chart(document.getElementById('deptChart'), {
-    type: 'bar',
+    type: 'pie',
     data: {
       labels: deptData.map(d => d.organization_name || 'Unknown'),
       datasets: [{
-        label: 'Employees',
         data: deptData.map(d => d.count),
-        backgroundColor: brandOrange,
-        borderRadius: 4
+        backgroundColor: palette,
+        borderWidth: 0
       }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    options: { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { 
+            legend: { position: 'right' },
+            tooltip: percentageTooltipConfig
+        } 
+    }
   });
   <?php endif; ?>
-
+  
+  // Employees per manager chart
   <?php if ($myRole === 'director'): ?>
   const empPerMgrData = <?= json_encode($empPerMgrData) ?>;
   new Chart(document.getElementById('empPerMgrChart'), {
