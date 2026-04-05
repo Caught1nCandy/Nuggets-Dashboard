@@ -514,7 +514,7 @@ if ($myRole !== 'employee') {
       labels: roleData.map(d => d.role || 'Unknown'),
       datasets: [{
         data: roleData.map(d => d.count),
-        backgroundColor: [brandOrange, brandPurple, '#1a56c4', '#009966'],
+        backgroundColor: [brandOrange, brandPurple, '#1a56c4', '#009966', '#e834eb'],
         borderWidth: 0
       }]
     },
