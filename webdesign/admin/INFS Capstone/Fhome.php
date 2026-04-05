@@ -6,29 +6,31 @@ if (!isset($_SESSION['authorized'])) {
     exit();
 }
 
+// Database connection
 require_once __DIR__ . '/db_config.php';
 
+// Store session variables
 $myRole = $_SESSION['role']; 
 $myId   = $_SESSION['employee_id'];
 
-// Dashboard Specific Scope
-$dashWhere = "1=0"; 
+// Dashboard scope logic
+$dashWhere = "1=0";
 $dashParams = [];
 
 if ($myRole === 'svp') {
-    $dashWhere = "1=1"; 
+    $dashWhere = "1=1"; // SVPs see the whole company
 } elseif ($myRole === 'vp') {
-    $dashWhere = "w.vp_id = ?";
+    $dashWhere = "w.vp_id = ?"; // VPs see their org
     $dashParams = [$myId];
 } elseif ($myRole === 'director') {
-    $dashWhere = "w.director_id = ?";
+    $dashWhere = "w.director_id = ?"; // Directors see their department
     $dashParams = [$myId];
 } elseif ($myRole === 'manager') {
-    $dashWhere = "w.manager_id = ?";
+    $dashWhere = "w.manager_id = ?"; // Managers see their team
     $dashParams = [$myId];
 }
 
-// Fetch Personal Details
+// Find personal details
 $stmt = $pdo->prepare("
     SELECT
         w.first_name, w.last_name, w.role, w.tenure, w.anniversary,
@@ -44,7 +46,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$myId]);
 $myDetails = $stmt->fetch();
 
-// Initialize Chart Data Variables
+// Initialize chart data arrays
 $titleData = [];
 $payBandData = [];
 $roleData = [];
@@ -52,9 +54,10 @@ $empPerMgrData = [];
 $deptData = [];
 $stateData = [];
 
-// Fetch Manager+ Data 
+// Get manager or higher data
 if ($myRole !== 'employee') {
     
+    // KPI card calculations 
     $stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_emp FROM workforce w WHERE $dashWhere");
     $stmt->execute($dashParams);
     $totalEmployees = $stmt->fetch()['total_emp'];
@@ -71,35 +74,46 @@ if ($myRole !== 'employee') {
     $stmt->execute($dashParams);
     $totalLocations = $stmt->fetch()['total_locs'];
 
-    // Job Title Chart 
+    // Chart queries 
+    
+    // Job title chart (managers & directors only)
     if (in_array($myRole, ['manager', 'director'])) {
         $stmt = $pdo->prepare("SELECT j.title, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere GROUP BY j.title");
         $stmt->execute($dashParams);
         $titleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // Pay band distribution
     $stmt = $pdo->prepare("SELECT j.pay_band, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere AND j.pay_band IS NOT NULL GROUP BY j.pay_band ORDER BY j.pay_band");
     $stmt->execute($dashParams);
     $payBandData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // State Distribution Data 
+    // State data
     $stmt = $pdo->prepare("SELECT l.state, COUNT(w.employee_id) as count FROM workforce w JOIN location l ON w.location_id = l.location_id WHERE $dashWhere AND l.state IS NOT NULL GROUP BY l.state ORDER BY count DESC");
     $stmt->execute($dashParams);
     $stateData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Role distribution (for vp & svp only)
     if (in_array($myRole, ['vp', 'svp'])) {
-        $stmt = $pdo->prepare("SELECT w.role, COUNT(w.employee_id) as count FROM workforce w WHERE $dashWhere GROUP BY w.role");
+        $stmt = $pdo->prepare("
+            SELECT w.role, COUNT(w.employee_id) as count 
+            FROM workforce w 
+            WHERE $dashWhere 
+            GROUP BY w.role 
+            ORDER BY FIELD(w.role, 'Employee', 'Manager', 'Director', 'VP', 'SVP')
+        ");
         $stmt->execute($dashParams);
         $roleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Department Distribution Data
+    // Department distribution (director+ only)
     if (in_array($myRole, ['director', 'vp', 'svp'])) {
         $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name ORDER BY count DESC");
         $stmt->execute($dashParams);
         $deptData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // Direct reports per manager (director only)
     if ($myRole === 'director') {
         $stmt = $pdo->prepare("
             SELECT CONCAT(mgr.first_name, ' ', mgr.last_name) as manager_name, COUNT(w.employee_id) as count 
@@ -119,10 +133,15 @@ if ($myRole !== 'employee') {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Home — Workforce Dashboard</title>
+  
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
+    
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    /* Brand colors */
     :root {
       --purple: #4D148C;
       --orange: #FF6200;
@@ -132,18 +151,21 @@ if ($myRole !== 'employee') {
       --text:   #1a1a1a;
       --muted:  #888888;
     }
+    
     html, body {
 		background: var(--bg);
 		color: var(--text);
 		font-family: 'Open Sans', sans-serif;
 		min-height: 100vh;
 	}
-    body { display: flex;
+    body { 
+        display: flex;
 		flex-direction: column;
 		align-items: center;
 		padding-bottom: 60px;
 	}
     
+    /* Main layout */
     .dashboard-container {
 		width: 100%;
 		max-width: 1200px;
@@ -160,16 +182,16 @@ if ($myRole !== 'employee') {
 		box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 		position: relative;
 	}
+    
     .card-top-accent::before {
 		content: '';
 		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
+		top: 0; left: 0; right: 0;
 		height: 3px;
 		border-radius: 10px 10px 0 0;
 		background: linear-gradient(90deg, var(--purple), var(--orange));
 	}
+    
     .card-title {
 		font-size: 14px;
 		font-weight: 700;
@@ -179,147 +201,50 @@ if ($myRole !== 'employee') {
 		margin-bottom: 16px;
 	}
     
-    .snapshot-header {
-		display: flex;
-		align-items: center;
-		gap: 16px;
-		margin-bottom: 16px;
-	}
-    .snapshot-avatar {
-		width: 60px;
-		height: 60px;
-		border-radius: 12px;
-		background: #ede0f8;
-		color: var(--purple);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 20px;
-		font-weight: 700;
-	}
-    .snapshot-name {
-		font-size: 24px;
-		font-weight: 700;
-		color: var(--purple);
-	}
-    .snapshot-role {
-		font-size: 14px;
-		color: var(--muted);
-	}
-    .snapshot-details {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 16px;
-		background: #fcfcfc;
-		padding: 16px;
-		border-radius: 8px;
-		border: 1px solid var(--border);
-	}
-    .detail-item label {
-		display: block;
-		font-size: 11px;
-		font-weight: 700;
-		color: var(--muted);
-		text-transform: uppercase;
-		margin-bottom: 4px;
-	}
-    .detail-item span {
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--text);
-	}
+    /* Snapshot ui */
+    .snapshot-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .snapshot-avatar { width: 60px; height: 60px; border-radius: 12px; background: #ede0f8; color: var(--purple); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+    .snapshot-name { font-size: 24px; font-weight: 700; color: var(--purple); }
+    .snapshot-role { font-size: 14px; color: var(--muted); }
+    .snapshot-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; background: #fcfcfc; padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
+    .detail-item label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .detail-item span { font-size: 14px; font-weight: 600; color: var(--text); }
     
-    .kpi-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 16px;
-	}
-    .kpi-card {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 20px;
-		text-align: center;
-		border-bottom: 3px solid var(--purple);
-	}
-    .kpi-value {
-		font-size: 32px;
-		font-weight: 700;
-		color: var(--purple); margin-bottom: 4px;
-	}
-    .kpi-label {
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--muted);
-		text-transform: uppercase;
-	}
+    /*KPI card grid */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; border-bottom: 3px solid var(--purple); }
+    .kpi-value { font-size: 32px; font-weight: 700; color: var(--purple); margin-bottom: 4px; }
+    .kpi-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
     
-    .chart-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-		gap: 24px;
-	}
-    .chart-container {
-		position: relative;
-		width: 100%;
-	}
-    
+    /* Chart layout css */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
+    .chart-container { position: relative; width: 100%; }
     .chart-tall { height: 400px; }
     .chart-standard { height: 280px; }
-    .full-width { grid-column: 1 / -1; }
+    .full-width { grid-column: 1 / -1; } /* Forces a card to span the entire width of the grid */
 
-    /* New Leaderboard Styles */
+    /* Leaderboard ui */
     .leaderboard-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: 280px;
-      overflow-y: auto;
-      padding-right: 8px;
+      display: flex; flex-direction: column; gap: 12px;
+      max-height: 280px; overflow-y: auto; padding-right: 8px;
     }
     .leaderboard-list::-webkit-scrollbar { width: 6px; }
     .leaderboard-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
     .leaderboard-list::-webkit-scrollbar-track { background: transparent; }
-
-    .leaderboard-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .leaderboard-label {
-      flex: 0 0 140px; 
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .leaderboard-bar-track {
-      flex: 1;
-      height: 6px;
-      background: #eeeeee;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .leaderboard-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--purple), var(--orange));
-      border-radius: 4px;
-    }
-    .leaderboard-value {
-      flex: 0 0 35px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--purple);
-      text-align: right;
-    }
+    .leaderboard-item { display: flex; align-items: center; gap: 12px; }
+    .leaderboard-label { flex: 0 0 140px; font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .leaderboard-bar-track { flex: 1; height: 6px; background: #eeeeee; border-radius: 4px; overflow: hidden; }
+    .leaderboard-bar-fill { height: 100%; background: linear-gradient(90deg, var(--purple), var(--orange)); border-radius: 4px; }
+    .leaderboard-value { flex: 0 0 35px; font-size: 12px; font-weight: 700; color: var(--purple); text-align: right; }
   </style>
 </head>
 <body>
 
-<?php include __DIR__ . '/impersonation_banner.php'; ?>
-<?php $activePage = 'home'; include __DIR__ . '/navbar.php'; ?>
+<?php
+include __DIR__ . '/impersonation_banner.php';
+$activePage = 'home';
+include __DIR__ . '/navbar.php';
+?>
 
 <div class="dashboard-container">
 
@@ -340,6 +265,7 @@ if ($myRole !== 'employee') {
   </div>
 
   <?php if ($myRole !== 'employee'): ?>
+  
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-value"><?= number_format($totalEmployees) ?></div>
@@ -382,6 +308,7 @@ if ($myRole !== 'employee') {
       <div class="chart-container chart-standard">
           <div class="leaderboard-list">
               <?php 
+              // Scales progress bars relative to the highest state
               $maxState = 0;
               foreach ($stateData as $s) { if ($s['count'] > $maxState) $maxState = $s['count']; }
               foreach ($stateData as $s): 
@@ -415,6 +342,7 @@ if ($myRole !== 'employee') {
       <div class="chart-container chart-standard">
           <div class="leaderboard-list">
               <?php 
+              // Scale progress bars relative to the largest department
               $maxDept = 0;
               foreach ($deptData as $d) { if ($d['count'] > $maxDept) $maxDept = $d['count']; }
               foreach ($deptData as $d): 
@@ -453,8 +381,11 @@ if ($myRole !== 'employee') {
   
   const brandPurple = '#4D148C';
   const brandOrange = '#FF6200';
+  
+  // Custom color palette 
   const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000', '#2E0C54', '#FF9F66'];
 
+  // Custom configuration for Doughnut/Pie charts to show % values 
   const percentageTooltipConfig = {
     callbacks: {
       label: function(context) {
@@ -468,6 +399,7 @@ if ($myRole !== 'employee') {
     }
   };
 
+  // Title Chart
   <?php if (in_array($myRole, ['manager', 'director'])): ?>
   const titleData = <?= json_encode($titleData) ?>;
   new Chart(document.getElementById('titleChart'), {
@@ -491,6 +423,7 @@ if ($myRole !== 'employee') {
   });
   <?php endif; ?>
 
+  // Payband Chart
   const payBandData = <?= json_encode($payBandData) ?>;
   new Chart(document.getElementById('payBandChart'), {
     type: 'bar',
@@ -506,6 +439,7 @@ if ($myRole !== 'employee') {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 
+  // Role Breakdown
   <?php if (in_array($myRole, ['vp', 'svp'])): ?>
   const roleData = <?= json_encode($roleData) ?>;
   new Chart(document.getElementById('roleChart'), {
@@ -514,6 +448,7 @@ if ($myRole !== 'employee') {
       labels: roleData.map(d => d.role || 'Unknown'),
       datasets: [{
         data: roleData.map(d => d.count),
+        // 5 distinct colors mapped to the 5 roles (ordered via SQL)
         backgroundColor: [brandOrange, brandPurple, '#1a56c4', '#009966', '#e834eb'],
         borderWidth: 0
       }]
@@ -529,6 +464,7 @@ if ($myRole !== 'employee') {
   });
   <?php endif; ?>
   
+  // Employees Per Manager
   <?php if ($myRole === 'director'): ?>
   const empPerMgrData = <?= json_encode($empPerMgrData) ?>;
   new Chart(document.getElementById('empPerMgrChart'), {
