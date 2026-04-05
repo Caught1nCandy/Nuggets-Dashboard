@@ -71,16 +71,19 @@ if ($myRole !== 'employee') {
     $stmt->execute($dashParams);
     $totalLocations = $stmt->fetch()['total_locs'];
 
-    $stmt = $pdo->prepare("SELECT j.title, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere GROUP BY j.title");
-    $stmt->execute($dashParams);
-    $titleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Job Title Chart 
+    if (in_array($myRole, ['manager', 'director'])) {
+        $stmt = $pdo->prepare("SELECT j.title, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere GROUP BY j.title");
+        $stmt->execute($dashParams);
+        $titleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     $stmt = $pdo->prepare("SELECT j.pay_band, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere AND j.pay_band IS NOT NULL GROUP BY j.pay_band ORDER BY j.pay_band");
     $stmt->execute($dashParams);
     $payBandData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // New State Distribution Data
-    $stmt = $pdo->prepare("SELECT l.state, COUNT(w.employee_id) as count FROM workforce w JOIN location l ON w.location_id = l.location_id WHERE $dashWhere AND l.state IS NOT NULL GROUP BY l.state");
+    // State Distribution Data 
+    $stmt = $pdo->prepare("SELECT l.state, COUNT(w.employee_id) as count FROM workforce w JOIN location l ON w.location_id = l.location_id WHERE $dashWhere AND l.state IS NOT NULL GROUP BY l.state ORDER BY count DESC");
     $stmt->execute($dashParams);
     $stateData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -90,8 +93,9 @@ if ($myRole !== 'employee') {
         $roleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // Department Distribution Data
     if (in_array($myRole, ['director', 'vp', 'svp'])) {
-        $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name");
+        $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name ORDER BY count DESC");
         $stmt->execute($dashParams);
         $deptData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -252,10 +256,9 @@ if ($myRole !== 'employee') {
     
     .chart-grid {
 		display: grid;
-		grid-template-columns:
-		repeat(auto-fit, minmax(400px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
 		gap: 24px;
-		}
+	}
     .chart-container {
 		position: relative;
 		width: 100%;
@@ -264,6 +267,53 @@ if ($myRole !== 'employee') {
     .chart-tall { height: 400px; }
     .chart-standard { height: 280px; }
     .full-width { grid-column: 1 / -1; }
+
+    /* New Leaderboard Styles */
+    .leaderboard-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+    .leaderboard-list::-webkit-scrollbar { width: 6px; }
+    .leaderboard-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .leaderboard-list::-webkit-scrollbar-track { background: transparent; }
+
+    .leaderboard-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .leaderboard-label {
+      flex: 0 0 140px; 
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .leaderboard-bar-track {
+      flex: 1;
+      height: 6px;
+      background: #eeeeee;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .leaderboard-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--purple), var(--orange));
+      border-radius: 4px;
+    }
+    .leaderboard-value {
+      flex: 0 0 35px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--purple);
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -315,10 +365,12 @@ if ($myRole !== 'employee') {
 
   <div class="chart-grid">
     
+    <?php if (in_array($myRole, ['manager', 'director'])): ?>
     <div class="card full-width">
       <div class="card-title">Workforce by Job Title</div>
       <div class="chart-container chart-tall"><canvas id="titleChart"></canvas></div>
     </div>
+    <?php endif; ?>
     
     <div class="card">
       <div class="card-title">Pay Band Distribution</div>
@@ -327,7 +379,27 @@ if ($myRole !== 'employee') {
 
     <div class="card">
       <div class="card-title">Employees by State</div>
-      <div class="chart-container chart-standard"><canvas id="stateChart"></canvas></div>
+      <div class="chart-container chart-standard">
+          <div class="leaderboard-list">
+              <?php 
+              $maxState = 0;
+              foreach ($stateData as $s) { if ($s['count'] > $maxState) $maxState = $s['count']; }
+              foreach ($stateData as $s): 
+                  $pct = $maxState > 0 ? round(($s['count'] / $maxState) * 100) : 0;
+              ?>
+              <div class="leaderboard-item">
+                  <div class="leaderboard-label" title="<?= htmlspecialchars($s['state']) ?>"><?= htmlspecialchars($s['state']) ?></div>
+                  <div class="leaderboard-bar-track">
+                      <div class="leaderboard-bar-fill" style="width: <?= $pct ?>%;"></div>
+                  </div>
+                  <div class="leaderboard-value"><?= number_format($s['count']) ?></div>
+              </div>
+              <?php endforeach; ?>
+              <?php if (empty($stateData)): ?>
+                  <div style="color: var(--muted); font-size: 13px;">No data available.</div>
+              <?php endif; ?>
+          </div>
+      </div>
     </div>
 
     <?php if (in_array($myRole, ['vp', 'svp'])): ?>
@@ -340,7 +412,27 @@ if ($myRole !== 'employee') {
     <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
     <div class="card">
       <div class="card-title">Employees by Department</div>
-      <div class="chart-container chart-standard"><canvas id="deptChart"></canvas></div>
+      <div class="chart-container chart-standard">
+          <div class="leaderboard-list">
+              <?php 
+              $maxDept = 0;
+              foreach ($deptData as $d) { if ($d['count'] > $maxDept) $maxDept = $d['count']; }
+              foreach ($deptData as $d): 
+                  $pct = $maxDept > 0 ? round(($d['count'] / $maxDept) * 100) : 0;
+              ?>
+              <div class="leaderboard-item">
+                  <div class="leaderboard-label" title="<?= htmlspecialchars($d['organization_name']) ?>"><?= htmlspecialchars($d['organization_name']) ?></div>
+                  <div class="leaderboard-bar-track">
+                      <div class="leaderboard-bar-fill" style="width: <?= $pct ?>%;"></div>
+                  </div>
+                  <div class="leaderboard-value"><?= number_format($d['count']) ?></div>
+              </div>
+              <?php endforeach; ?>
+              <?php if (empty($deptData)): ?>
+                  <div style="color: var(--muted); font-size: 13px;">No data available.</div>
+              <?php endif; ?>
+          </div>
+      </div>
     </div>
     <?php endif; ?>
 
@@ -357,14 +449,12 @@ if ($myRole !== 'employee') {
 </div>
 
 <script>
-// Department chart
 <?php if ($myRole !== 'employee'): ?>
   
   const brandPurple = '#4D148C';
   const brandOrange = '#FF6200';
   const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000', '#2E0C54', '#FF9F66'];
 
- 
   const percentageTooltipConfig = {
     callbacks: {
       label: function(context) {
@@ -378,6 +468,7 @@ if ($myRole !== 'employee') {
     }
   };
 
+  <?php if (in_array($myRole, ['manager', 'director'])): ?>
   const titleData = <?= json_encode($titleData) ?>;
   new Chart(document.getElementById('titleChart'), {
     type: 'doughnut',
@@ -398,6 +489,7 @@ if ($myRole !== 'employee') {
         } 
     }
   });
+  <?php endif; ?>
 
   const payBandData = <?= json_encode($payBandData) ?>;
   new Chart(document.getElementById('payBandChart'), {
@@ -414,32 +506,6 @@ if ($myRole !== 'employee') {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 
-  // State chart
-  const stateData = <?= json_encode($stateData) ?>;
-  new Chart(document.getElementById('stateChart'), {
-    type: 'polarArea',
-    data: {
-      labels: stateData.map(d => d.state || 'Unknown'),
-      datasets: [{
-        data: stateData.map(d => d.count),
-        backgroundColor: [
-            'rgba(77, 20, 140, 0.7)',
-            'rgba(255, 98, 0, 0.7)',
-            'rgba(26, 86, 196, 0.7)',
-            'rgba(0, 153, 102, 0.7)',
-            'rgba(204, 0, 0, 0.7)'
-        ],
-        borderWidth: 1
-      }]
-    },
-    options: { 
-        responsive: true, 
-        maintainAspectRatio: false, 
-        plugins: { legend: { position: 'right' } } 
-    }
-  });
-
-// role chart
   <?php if (in_array($myRole, ['vp', 'svp'])): ?>
   const roleData = <?= json_encode($roleData) ?>;
   new Chart(document.getElementById('roleChart'), {
@@ -462,32 +528,7 @@ if ($myRole !== 'employee') {
     }
   });
   <?php endif; ?>
-
-  // Department chart
-  <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
-  const deptData = <?= json_encode($deptData) ?>;
-  new Chart(document.getElementById('deptChart'), {
-    type: 'pie',
-    data: {
-      labels: deptData.map(d => d.organization_name || 'Unknown'),
-      datasets: [{
-        data: deptData.map(d => d.count),
-        backgroundColor: palette,
-        borderWidth: 0
-      }]
-    },
-    options: { 
-        responsive: true, 
-        maintainAspectRatio: false, 
-        plugins: { 
-            legend: { position: 'right' },
-            tooltip: percentageTooltipConfig
-        } 
-    }
-  });
-  <?php endif; ?>
   
-  // Employees per manager chart
   <?php if ($myRole === 'director'): ?>
   const empPerMgrData = <?= json_encode($empPerMgrData) ?>;
   new Chart(document.getElementById('empPerMgrChart'), {
