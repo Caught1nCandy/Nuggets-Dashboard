@@ -7,38 +7,28 @@ if (!isset($_SESSION['authorized'])) {
 }
 
 require_once __DIR__ . '/db_config.php';
-require_once __DIR__ . '/permissions.php';
 
 $myRole = $_SESSION['role'];
 $myId   = $_SESSION['employee_id'];
 
-// Get the scope clause based on role 
-$scope  = getScopeClause($myRole, $myId, $pdo);
-$whereSQL = $scope['sql'];
-$params   = $scope['params'];
+// Specific Scope Logic
+$dashWhere = "1=0";
+$dashParams = [];
 
-// KPI Cards Data 
-// Total Employees in scope
-$stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_emp FROM workforce w WHERE $whereSQL");
-$stmt->execute($params);
-$totalEmployees = $stmt->fetch()['total_emp'];
+if ($myRole === 'SVP') {
+    $dashWhere = "1=1";
+} elseif ($myRole === 'VP') {
+    $dashWhere = "w.vp_id = ?";
+    $dashParams = [$myId];
+} elseif ($myRole === 'Director') {
+    $dashWhere = "w.director_id = ?";
+    $dashParams = [$myId];
+} elseif ($myRole === 'Manager') {
+    $dashWhere = "w.manager_id = ?";
+    $dashParams = [$myId];
+}
 
-// Number of Managers in scope
-$stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_mgrs FROM workforce w WHERE $whereSQL AND role IN ('Manager', 'Director', 'VP', 'SVP')");
-$stmt->execute($params);
-$totalManagers = $stmt->fetch()['total_mgrs'];
-
-// Average Tenure in scope
-$stmt = $pdo->prepare("SELECT ROUND(AVG(tenure), 1) as avg_tenure FROM workforce w WHERE $whereSQL AND tenure IS NOT NULL");
-$stmt->execute($params);
-$avgTenure = $stmt->fetch()['avg_tenure'] ?? 0;
-
-// Locations Covered in scope
-$stmt = $pdo->prepare("SELECT COUNT(DISTINCT location_id) as total_locs FROM workforce w WHERE $whereSQL AND location_id IS NOT NULL");
-$stmt->execute($params);
-$totalLocations = $stmt->fetch()['total_locs'];
-
-// Personal Snapshot Data (For Employee View or Top Section)
+// Fetch Personal Details
 $stmt = $pdo->prepare("
     SELECT
         w.first_name, w.last_name, w.role, w.tenure, w.anniversary,
@@ -54,37 +44,80 @@ $stmt = $pdo->prepare("
 $stmt->execute([$myId]);
 $myDetails = $stmt->fetch();
 
-// --- Data for Charts (Passed to JS later) ---
+// Chart Data Variables 
+$titleData = [];
+$payBandData = [];
+$roleData = [];
+$empPerMgrData = [];
+$deptData = [];
 
-// Roles Distribution
-$stmt = $pdo->prepare("SELECT role, COUNT(employee_id) as count FROM workforce w WHERE $whereSQL GROUP BY role");
-$stmt->execute($params);
-$rolesData = $stmt->fetchAll();
+// --- Fetch Manager+ Data ---
+if ($myRole !== 'employee') {
+    // 1. Accurate KPI Cards using the strict $dashWhere
+    $stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_emp FROM workforce w WHERE $dashWhere");
+    $stmt->execute($dashParams);
+    $totalEmployees = $stmt->fetch()['total_emp'];
 
-// Job Type Distribution
-$stmt = $pdo->prepare("SELECT j.job_type, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $whereSQL GROUP BY j.job_type");
-$stmt->execute($params);
-$jobTypeData = $stmt->fetchAll();
+    $stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_mgrs FROM workforce w WHERE $dashWhere AND role IN ('Manager', 'Director', 'VP', 'SVP')");
+    $stmt->execute($dashParams);
+    $totalManagers = $stmt->fetch()['total_mgrs'];
 
-// Location Distribution
-$stmt = $pdo->prepare("SELECT l.state, COUNT(w.employee_id) as count FROM workforce w JOIN location l ON w.location_id = l.location_id WHERE $whereSQL GROUP BY l.state");
-$stmt->execute($params);
-$locationData = $stmt->fetchAll();
+    $stmt = $pdo->prepare("SELECT ROUND(AVG(tenure), 1) as avg_tenure FROM workforce w WHERE $dashWhere AND tenure IS NOT NULL");
+    $stmt->execute($dashParams);
+    $avgTenure = $stmt->fetch()['avg_tenure'] ?? 0;
 
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT location_id) as total_locs FROM workforce w WHERE $dashWhere AND location_id IS NOT NULL");
+    $stmt->execute($dashParams);
+    $totalLocations = $stmt->fetch()['total_locs'];
+
+    // Everyone (Manager+) - Job Title Distribution
+    $stmt = $pdo->prepare("SELECT j.title, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere GROUP BY j.title");
+    $stmt->execute($dashParams);
+    $titleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Everyone (Manager+) - Pay Band Distribution
+    $stmt = $pdo->prepare("SELECT j.pay_band, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere AND j.pay_band IS NOT NULL GROUP BY j.pay_band ORDER BY j.pay_band");
+    $stmt->execute($dashParams);
+    $payBandData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // VP/SVP Only - Role Distribution
+    if (in_array($myRole, ['VP', 'SVP'])) {
+        $stmt = $pdo->prepare("SELECT w.role, COUNT(w.employee_id) as count FROM workforce w WHERE $dashWhere GROUP BY w.role");
+        $stmt->execute($dashParams);
+        $roleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Director, VP, SVP - Employees by Department
+    if (in_array($myRole, ['Director', 'VP', 'SVP'])) {
+        $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name");
+        $stmt->execute($dashParams);
+        $deptData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Director Only - Employees per Manager
+    if ($myRole === 'Director') {
+        $stmt = $pdo->prepare("
+            SELECT CONCAT(mgr.first_name, ' ', mgr.last_name) as manager_name, COUNT(w.employee_id) as count 
+            FROM workforce w 
+            JOIN workforce mgr ON w.manager_id = mgr.employee_id 
+            WHERE $dashWhere 
+            GROUP BY w.manager_id
+        ");
+        $stmt->execute($dashParams);
+        $empPerMgrData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Home — Workforce Dashboard</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --purple: #4D148C;
       --orange: #FF6200;
@@ -94,87 +127,30 @@ $locationData = $stmt->fetchAll();
       --text:   #1a1a1a;
       --muted:  #888888;
     }
-
-    html, body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Open Sans', sans-serif;
-      min-height: 100vh;
-      margin: 0;
-      padding: 0;
-    }
-
+    html, body { background: var(--bg); color: var(--text); font-family: 'Open Sans', sans-serif; min-height: 100vh; }
     body { display: flex; flex-direction: column; align-items: center; padding-bottom: 60px; }
-
-    /* Main Container */
-    .dashboard-container {
-      width: 100%;
-      max-width: 1200px;
-      padding: 32px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    /* Common Card Style */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      position: relative;
-    }
     
-    .card-top-accent::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      border-radius: 10px 10px 0 0;
-      background: linear-gradient(90deg, var(--purple), var(--orange));
-    }
-
-    .card-title {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 16px;
-    }
-
-    /* Personal Snapshot */
+    .dashboard-container { width: 100%; max-width: 1200px; padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
+    
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
+    .card-top-accent::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 10px 10px 0 0; background: linear-gradient(90deg, var(--purple), var(--orange)); }
+    .card-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 16px; }
+    
     .snapshot-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-    .snapshot-avatar {
-      width: 60px; height: 60px; border-radius: 12px;
-      background: #ede0f8; color: var(--purple);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 700;
-    }
+    .snapshot-avatar { width: 60px; height: 60px; border-radius: 12px; background: #ede0f8; color: var(--purple); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
     .snapshot-name { font-size: 24px; font-weight: 700; color: var(--purple); }
     .snapshot-role { font-size: 14px; color: var(--muted); }
-    
-    .snapshot-details {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
-      background: #fcfcfc; padding: 16px; border-radius: 8px; border: 1px solid var(--border);
-    }
+    .snapshot-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; background: #fcfcfc; padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
     .detail-item label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
     .detail-item span { font-size: 14px; font-weight: 600; color: var(--text); }
-
-    /* KPI Grid */
+    
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .kpi-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-      padding: 20px; text-align: center; border-bottom: 3px solid var(--purple);
-    }
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; border-bottom: 3px solid var(--purple); }
     .kpi-value { font-size: 32px; font-weight: 700; color: var(--purple); margin-bottom: 4px; }
     .kpi-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
-
-    /* Chart Grid */
-    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
-    .chart-container { position: relative; height: 250px; width: 100%; }
-
+    
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
+    .chart-container { position: relative; height: 280px; width: 100%; }
   </style>
 </head>
 <body>
@@ -221,14 +197,37 @@ $locationData = $stmt->fetchAll();
   </div>
 
   <div class="chart-grid">
+    
+    <div class="card">
+      <div class="card-title">Workforce by Job Title</div>
+      <div class="chart-container"><canvas id="titleChart"></canvas></div>
+    </div>
+    
+    <div class="card">
+      <div class="card-title">Pay Band Distribution</div>
+      <div class="chart-container"><canvas id="payBandChart"></canvas></div>
+    </div>
+
+    <?php if (in_array($myRole, ['VP', 'SVP'])): ?>
     <div class="card">
       <div class="card-title">Workforce by Role</div>
       <div class="chart-container"><canvas id="roleChart"></canvas></div>
     </div>
-    <div class="card">
-      <div class="card-title">Workforce by Job Type</div>
-      <div class="chart-container"><canvas id="jobTypeChart"></canvas></div>
+    <?php endif; ?>
+
+    <?php if (in_array($myRole, ['Director', 'VP', 'SVP'])): ?>
+    <div class="card" style="grid-column: 1 / -1;"> <div class="card-title">Employees by Department</div>
+      <div class="chart-container"><canvas id="deptChart"></canvas></div>
     </div>
+    <?php endif; ?>
+
+    <?php if ($myRole === 'Director'): ?>
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="card-title">Employees per Manager</div>
+      <div class="chart-container"><canvas id="empPerMgrChart"></canvas></div>
+    </div>
+    <?php endif; ?>
+
   </div>
   <?php endif; ?>
 
@@ -236,21 +235,19 @@ $locationData = $stmt->fetchAll();
 
 <script>
 <?php if ($myRole !== 'employee'): ?>
-  // Inject PHP data into JS variables 
-  const rolesData = <?= json_encode($rolesData) ?>;
-  const jobTypeData = <?= json_encode($jobTypeData) ?>;
   
   const brandPurple = '#4D148C';
   const brandOrange = '#FF6200';
-  const palette = [brandPurple, brandOrange, '#ede0f8', '#fff0e6', '#1a56c4'];
+  const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000'];
 
-  // Role Chart (Donut)
-  new Chart(document.getElementById('roleChart'), {
+  // Job Title Chart (Donut)
+  const titleData = <?= json_encode($titleData) ?>;
+  new Chart(document.getElementById('titleChart'), {
     type: 'doughnut',
     data: {
-      labels: rolesData.map(d => d.role || 'Unknown'),
+      labels: titleData.map(d => d.title || 'Unknown'),
       datasets: [{
-        data: rolesData.map(d => d.count),
+        data: titleData.map(d => d.count),
         backgroundColor: palette,
         borderWidth: 0
       }]
@@ -258,25 +255,75 @@ $locationData = $stmt->fetchAll();
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
   });
 
-  // Job Type Chart (Bar)
-  new Chart(document.getElementById('jobTypeChart'), {
+  // Pay Band Chart (Bar chart works better here to show distribution spread)
+  const payBandData = <?= json_encode($payBandData) ?>;
+  new Chart(document.getElementById('payBandChart'), {
     type: 'bar',
     data: {
-      labels: jobTypeData.map(d => d.job_type || 'Unknown'),
+      labels: payBandData.map(d => d.pay_band || 'Unknown'),
       datasets: [{
         label: 'Employees',
-        data: jobTypeData.map(d => d.count),
+        data: payBandData.map(d => d.count),
         backgroundColor: brandPurple,
         borderRadius: 4
       }]
     },
-    options: { 
-      responsive: true, 
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
+
+  // VP / SVP Role Chart
+  <?php if (in_array($myRole, ['VP', 'SVP'])): ?>
+  const roleData = <?= json_encode($roleData) ?>;
+  new Chart(document.getElementById('roleChart'), {
+    type: 'doughnut',
+    data: {
+      labels: roleData.map(d => d.role || 'Unknown'),
+      datasets: [{
+        data: roleData.map(d => d.count),
+        backgroundColor: [brandOrange, brandPurple, '#1a56c4', '#009966'],
+        borderWidth: 0
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+  });
+  <?php endif; ?>
+
+  // Director, VP, SVP Dept Chart
+  <?php if (in_array($myRole, ['Director', 'VP', 'SVP'])): ?>
+  const deptData = <?= json_encode($deptData) ?>;
+  new Chart(document.getElementById('deptChart'), {
+    type: 'bar',
+    data: {
+      labels: deptData.map(d => d.organization_name || 'Unknown'),
+      datasets: [{
+        label: 'Employees',
+        data: deptData.map(d => d.count),
+        backgroundColor: brandOrange,
+        borderRadius: 4
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+  <?php endif; ?>
+
+  // Director Emp per Manager Chart
+  <?php if ($myRole === 'Director'): ?>
+  const empPerMgrData = <?= json_encode($empPerMgrData) ?>;
+  new Chart(document.getElementById('empPerMgrChart'), {
+    type: 'bar',
+    data: {
+      labels: empPerMgrData.map(d => d.manager_name || 'Unknown'),
+      datasets: [{
+        label: 'Employees on Team',
+        data: empPerMgrData.map(d => d.count),
+        backgroundColor: '#1a56c4',
+        borderRadius: 4
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+  <?php endif; ?>
+
 <?php endif; ?>
 </script>
 
