@@ -11,24 +11,24 @@ require_once __DIR__ . '/db_config.php';
 $myRole = $_SESSION['role'];
 $myId   = $_SESSION['employee_id'];
 
-// Specific Scope Logic
+// Specific Scope Logic 
 $dashWhere = "1=0";
 $dashParams = [];
 
-if ($myRole === 'SVP') {
-    $dashWhere = "1=1";
-} elseif ($myRole === 'VP') {
+if ($myRole === 'svp') {
+    $dashWhere = "1=1"; 
+} elseif ($myRole === 'vp') {
     $dashWhere = "w.vp_id = ?";
     $dashParams = [$myId];
-} elseif ($myRole === 'Director') {
+} elseif ($myRole === 'director') {
     $dashWhere = "w.director_id = ?";
     $dashParams = [$myId];
-} elseif ($myRole === 'Manager') {
+} elseif ($myRole === 'manager') {
     $dashWhere = "w.manager_id = ?";
     $dashParams = [$myId];
 }
 
-// Fetch Personal Details
+// Fetch Personal Details 
 $stmt = $pdo->prepare("
     SELECT
         w.first_name, w.last_name, w.role, w.tenure, w.anniversary,
@@ -51,9 +51,9 @@ $roleData = [];
 $empPerMgrData = [];
 $deptData = [];
 
-// --- Fetch Manager+ Data ---
+// Fetch Manager+ Data 
 if ($myRole !== 'employee') {
-    // 1. Accurate KPI Cards using the strict $dashWhere
+    
     $stmt = $pdo->prepare("SELECT COUNT(employee_id) as total_emp FROM workforce w WHERE $dashWhere");
     $stmt->execute($dashParams);
     $totalEmployees = $stmt->fetch()['total_emp'];
@@ -70,32 +70,28 @@ if ($myRole !== 'employee') {
     $stmt->execute($dashParams);
     $totalLocations = $stmt->fetch()['total_locs'];
 
-    // Everyone (Manager+) - Job Title Distribution
     $stmt = $pdo->prepare("SELECT j.title, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere GROUP BY j.title");
     $stmt->execute($dashParams);
     $titleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Everyone (Manager+) - Pay Band Distribution
     $stmt = $pdo->prepare("SELECT j.pay_band, COUNT(w.employee_id) as count FROM workforce w JOIN job j ON w.job_code = j.job_code WHERE $dashWhere AND j.pay_band IS NOT NULL GROUP BY j.pay_band ORDER BY j.pay_band");
     $stmt->execute($dashParams);
     $payBandData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // VP/SVP Only - Role Distribution
-    if (in_array($myRole, ['VP', 'SVP'])) {
+    
+    if (in_array($myRole, ['vp', 'svp'])) {
         $stmt = $pdo->prepare("SELECT w.role, COUNT(w.employee_id) as count FROM workforce w WHERE $dashWhere GROUP BY w.role");
         $stmt->execute($dashParams);
         $roleData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-    // Director, VP, SVP - Employees by Department
-    if (in_array($myRole, ['Director', 'VP', 'SVP'])) {
+	
+    if (in_array($myRole, ['director', 'vp', 'svp'])) {
         $stmt = $pdo->prepare("SELECT o.organization_name, COUNT(w.employee_id) as count FROM workforce w JOIN organization o ON w.org_id = o.org_id WHERE $dashWhere GROUP BY o.organization_name");
         $stmt->execute($dashParams);
         $deptData = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-    // Director Only - Employees per Manager
-    if ($myRole === 'Director') {
+	
+    if ($myRole === 'director') {
         $stmt = $pdo->prepare("
             SELECT CONCAT(mgr.first_name, ' ', mgr.last_name) as manager_name, COUNT(w.employee_id) as count 
             FROM workforce w 
@@ -197,7 +193,6 @@ if ($myRole !== 'employee') {
   </div>
 
   <div class="chart-grid">
-    
     <div class="card">
       <div class="card-title">Workforce by Job Title</div>
       <div class="chart-container"><canvas id="titleChart"></canvas></div>
@@ -208,20 +203,21 @@ if ($myRole !== 'employee') {
       <div class="chart-container"><canvas id="payBandChart"></canvas></div>
     </div>
 
-    <?php if (in_array($myRole, ['VP', 'SVP'])): ?>
+    <?php if (in_array($myRole, ['vp', 'svp'])): ?>
     <div class="card">
       <div class="card-title">Workforce by Role</div>
       <div class="chart-container"><canvas id="roleChart"></canvas></div>
     </div>
     <?php endif; ?>
 
-    <?php if (in_array($myRole, ['Director', 'VP', 'SVP'])): ?>
-    <div class="card" style="grid-column: 1 / -1;"> <div class="card-title">Employees by Department</div>
+    <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="card-title">Employees by Department</div>
       <div class="chart-container"><canvas id="deptChart"></canvas></div>
     </div>
     <?php endif; ?>
 
-    <?php if ($myRole === 'Director'): ?>
+    <?php if ($myRole === 'director'): ?>
     <div class="card" style="grid-column: 1 / -1;">
       <div class="card-title">Employees per Manager</div>
       <div class="chart-container"><canvas id="empPerMgrChart"></canvas></div>
@@ -240,7 +236,6 @@ if ($myRole !== 'employee') {
   const brandOrange = '#FF6200';
   const palette = [brandPurple, brandOrange, '#6b2bc2', '#ff8533', '#1a56c4', '#ede0f8', '#ffccaa', '#009966', '#cc0000'];
 
-  // Job Title Chart (Donut)
   const titleData = <?= json_encode($titleData) ?>;
   new Chart(document.getElementById('titleChart'), {
     type: 'doughnut',
@@ -255,7 +250,6 @@ if ($myRole !== 'employee') {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
   });
 
-  // Pay Band Chart (Bar chart works better here to show distribution spread)
   const payBandData = <?= json_encode($payBandData) ?>;
   new Chart(document.getElementById('payBandChart'), {
     type: 'bar',
@@ -271,8 +265,7 @@ if ($myRole !== 'employee') {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 
-  // VP / SVP Role Chart
-  <?php if (in_array($myRole, ['VP', 'SVP'])): ?>
+  <?php if (in_array($myRole, ['vp', 'svp'])): ?>
   const roleData = <?= json_encode($roleData) ?>;
   new Chart(document.getElementById('roleChart'), {
     type: 'doughnut',
@@ -288,8 +281,7 @@ if ($myRole !== 'employee') {
   });
   <?php endif; ?>
 
-  // Director, VP, SVP Dept Chart
-  <?php if (in_array($myRole, ['Director', 'VP', 'SVP'])): ?>
+  <?php if (in_array($myRole, ['director', 'vp', 'svp'])): ?>
   const deptData = <?= json_encode($deptData) ?>;
   new Chart(document.getElementById('deptChart'), {
     type: 'bar',
@@ -306,8 +298,7 @@ if ($myRole !== 'employee') {
   });
   <?php endif; ?>
 
-  // Director Emp per Manager Chart
-  <?php if ($myRole === 'Director'): ?>
+  <?php if ($myRole === 'director'): ?>
   const empPerMgrData = <?= json_encode($empPerMgrData) ?>;
   new Chart(document.getElementById('empPerMgrChart'), {
     type: 'bar',
