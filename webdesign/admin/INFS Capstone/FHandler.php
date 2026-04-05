@@ -106,11 +106,11 @@ switch ($_SESSION['role']) {
     case 'vp':
     case 'director':
     case 'manager':
-        header("Location: employee_search.php");
+        header("Location: Fhome.php");
         break;
     case 'employee':
     default:
-        header("Location: employee_search.php");
+        header("Location: Fhome.php");
         break;
 }
 
