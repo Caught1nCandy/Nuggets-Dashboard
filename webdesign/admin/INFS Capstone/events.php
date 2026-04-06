@@ -1,6 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
 session_start();
 if (!isset($_SESSION['authorized'])) {
     session_destroy();
@@ -26,7 +24,7 @@ $firstDow    = (int)date('w', mktime(0, 0, 0, $month, 1, $year));
 
 // Pull birthdays — include employee_id so we can click through
 $stmtB = $pdo->prepare("
-    SELECT w.employee_id, w.first_name, w.last_name, DAY(w.birthday) AS event_day
+    SELECT w.employee_id, w.first_name, w.last_name, w.role, DAY(w.birthday) AS event_day
     FROM workforce w
     WHERE MONTH(w.birthday) = :month AND w.birthday IS NOT NULL
     ORDER BY DAY(w.birthday), w.last_name
@@ -36,7 +34,7 @@ $birthdayRows = $stmtB->fetchAll();
 
 // Pull anniversaries — include employee_id
 $stmtA = $pdo->prepare("
-    SELECT w.employee_id, w.first_name, w.last_name, DAY(w.anniversary) AS event_day
+    SELECT w.employee_id, w.first_name, w.last_name, w.role, DAY(w.anniversary) AS event_day
     FROM workforce w
     WHERE MONTH(w.anniversary) = :month AND w.anniversary IS NOT NULL
     ORDER BY DAY(w.anniversary), w.last_name
@@ -52,12 +50,14 @@ foreach ($birthdayRows as $r) {
     $birthdays[(int)$r['event_day']][] = [
         'id'   => $r['employee_id'],
         'name' => $r['first_name'] . ' ' . $r['last_name'],
+        'role' => $r['role'] ?? 'Employee',
     ];
 }
 foreach ($anniversaryRows as $r) {
     $anniversaries[(int)$r['event_day']][] = [
         'id'   => $r['employee_id'],
         'name' => $r['first_name'] . ' ' . $r['last_name'],
+        'role' => $r['role'] ?? 'Employee',
     ];
 }
 ?>
@@ -159,6 +159,13 @@ foreach ($anniversaryRows as $r) {
     .sub-row:hover .sub-arrow { opacity: 1; }
 
     .ev-loading { text-align: center; padding: 24px; color: var(--muted); font-size: 14px; }
+
+    .role-badge-pill { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+    .role-badge-pill.Employee { background: #2e0a5e; color: #e0d0f8; }
+    .role-badge-pill.Manager  { background: #7a3200; color: #ffe8d0; }
+    .role-badge-pill.Director { background: #1a56c4; color: #e6f0ff; }
+    .role-badge-pill.VP       { background: #1a7a4a; color: #e6faf0; }
+    .role-badge-pill.SVP      { background: #7a5500; color: #fff3d0; }
   </style>
 </head>
 <body>
@@ -220,8 +227,8 @@ foreach ($anniversaryRows as $r) {
           <div class="events-area">
             <?php
             $allEvents = [];
-            foreach ($bdays  as $p) $allEvents[] = ['type' => 'birthday',     'name' => $p['name'], 'id' => $p['id']];
-            foreach ($annivs as $p) $allEvents[] = ['type' => 'anniversary',  'name' => $p['name'], 'id' => $p['id']];
+            foreach ($bdays  as $p) $allEvents[] = ['type' => 'birthday',     'name' => $p['name'], 'id' => $p['id'], 'role' => $p['role']];
+            foreach ($annivs as $p) $allEvents[] = ['type' => 'anniversary',  'name' => $p['name'], 'id' => $p['id'], 'role' => $p['role']];
 
             $visible  = array_slice($allEvents, 0, $maxVisible);
             $overflow = count($allEvents) - count($visible);
@@ -229,13 +236,18 @@ foreach ($anniversaryRows as $r) {
             foreach ($visible as $ev):
               $cls   = $ev['type'];
               $icon  = $cls === 'birthday' ? '🎂' : '🎉';
-            $short = strlen($ev['name']) > 14 ? substr($ev['name'], 0, 13) . '…' : $ev['name'];
+              $short = strlen($ev['name']) > 14 ? substr($ev['name'], 0, 13) . '…' : $ev['name'];
             ?>
               <div class="event-pill <?= $cls ?>"
                    onclick='openDayModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
                    title="<?= htmlspecialchars($ev['name']) ?>">
                 <span class="pill-icon"><?= $icon ?></span>
                 <?= htmlspecialchars($short) ?>
+                <?php
+                  $roleMap = ['Employee'=>'EMP','Manager'=>'MGR','Director'=>'DIR','VP'=>'VP','SVP'=>'SVP'];
+                  $roleLabel = $roleMap[$ev['role']] ?? substr($ev['role'],0,3);
+                ?>
+                <span class="role-badge-pill <?= htmlspecialchars($ev['role']) ?>"><?= htmlspecialchars($roleLabel) ?></span>
               </div>
             <?php endforeach; ?>
 
