@@ -341,7 +341,7 @@ $currentId       = $_SESSION['employee_id'];
 <div class="site-header">
   <span class="page-title">&#9881; Sysadmin Test Panel</span>
   <span class="badge">Testing Only</span>
-  <a href="employee_search.php" class="go-dashboard">&#8594; Go to Dashboard</a>
+  <a href="Fhome.php" class="go-dashboard">&#8594; Go to Dashboard</a>
 </div>
 
 <div class="wrapper">
