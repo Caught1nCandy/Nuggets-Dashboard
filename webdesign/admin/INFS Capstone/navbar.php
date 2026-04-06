@@ -14,7 +14,6 @@ $navPages = [
     'search'   => ['label' => 'Employee Search', 'href' => 'employee_search.php',  'roles' => ['all']],
     'map'      => ['label' => 'Maps',             'href' => 'employee_map.php',     'roles' => ['all']],
     'events'   => ['label' => 'Events',           'href' => 'events.php',           'roles' => ['all']],
-    'drill'    => ['label' => 'Drill Down',        'href' => 'Fdrill.php',           'roles' => ['all']],
     'request'  => ['label' => 'Update Request',   'href' => 'Frequest.php',         'roles' => ['manager','director','vp','svp','sysadmin']],
     'approval' => ['label' => 'Request Approval', 'href' => 'request_approval.php', 'roles' => ['sysadmin']],
 ];
