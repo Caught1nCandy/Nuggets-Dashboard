@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 // map_state_api.php
 // Returns all employees in a given state for the map click modal.
 // Respects the same role-based permissions as search_api.php.
