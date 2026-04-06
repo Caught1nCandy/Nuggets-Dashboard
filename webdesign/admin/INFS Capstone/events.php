@@ -229,7 +229,7 @@ foreach ($anniversaryRows as $r) {
             foreach ($visible as $ev):
               $cls   = $ev['type'];
               $icon  = $cls === 'birthday' ? '🎂' : '🎉';
-              $short = mb_strlen($ev['name']) > 14 ? mb_substr($ev['name'], 0, 13) . '…' : $ev['name'];
+            $short = strlen($ev['name']) > 14 ? substr($ev['name'], 0, 13) . '…' : $ev['name'];
             ?>
               <div class="event-pill <?= $cls ?>"
                    onclick='openDayModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
