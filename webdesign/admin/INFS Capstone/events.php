@@ -78,7 +78,7 @@ foreach ($anniversaryRows as $r) {
     html, body { background: var(--bg); color: var(--text); font-family: 'Open Sans', sans-serif; min-height: 100vh; margin: 0; padding: 0; }
     body { display: flex; flex-direction: column; align-items: center; padding-bottom: 60px; }
 
-    .cal-wrapper { width: 100%; max-width: 1100px; padding: 32px 24px 0; }
+    .cal-wrapper { width: 100%; max-width: 1280px; padding: 32px 24px 0; }
 
     .month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
     .month-nav h2 { font-size: 24px; font-weight: 700; color: var(--purple); }
@@ -100,7 +100,8 @@ foreach ($anniversaryRows as $r) {
     .day-num { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
     .events-area { display: flex; flex-direction: column; gap: 3px; }
 
-    .event-pill { display: flex; align-items: center; gap: 4px; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600; line-height: 1.4; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .event-pill { display: flex; align-items: center; gap: 4px; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600; line-height: 1.4; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; overflow: hidden; max-width: 100%; }
+    .event-pill .pill-name { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
     .event-pill:hover { opacity: 0.8; }
     .event-pill.birthday    { background: #ede0f8; color: var(--purple); border-left: 3px solid var(--purple); }
     .event-pill.anniversary { background: #fff0e6; color: #c44d00;      border-left: 3px solid var(--orange); }
@@ -242,7 +243,7 @@ foreach ($anniversaryRows as $r) {
                    onclick='openDayModal(<?= htmlspecialchars($modalData, ENT_QUOTES) ?>)'
                    title="<?= htmlspecialchars($ev['name']) ?>">
                 <span class="pill-icon"><?= $icon ?></span>
-                <?= htmlspecialchars($short) ?>
+                <span class="pill-name"><?= htmlspecialchars($short) ?></span>
                 <?php
                   $roleMap = ['Employee'=>'EMP','Manager'=>'MGR','Director'=>'DIR','VP'=>'VP','SVP'=>'SVP'];
                   $roleLabel = $roleMap[$ev['role']] ?? substr($ev['role'],0,3);
