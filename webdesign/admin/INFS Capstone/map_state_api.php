@@ -77,6 +77,13 @@ $stmt = $pdo->prepare("
     LEFT JOIN location     l ON l.location_id = w.location_id
     WHERE $whereSQL
     ORDER BY
+        -- Full access first, then limited visibility
+        CASE ($viewLevelSQL)
+            WHEN 'full'      THEN 0
+            WHEN 'name_only' THEN 1
+            ELSE 2
+        END ASC,
+        -- Within each group, highest role first
         CASE w.role
             WHEN 'SVP'      THEN 1
             WHEN 'VP'       THEN 2
