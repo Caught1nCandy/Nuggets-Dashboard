@@ -32,7 +32,7 @@ if ($un === '79723646' && $ps === 'sys4dm1n') {
     $_SESSION['first_name']  = 'Sys';
     $_SESSION['last_name']   = 'Admin';
     $_SESSION['is_sysadmin'] = true;  // persists even during impersonation
-    header("Location: sysadmin_test.php");
+    header("Location: sysadmin_test.php"); // sysadmin goes to test panel, not dashboard
     exit();
 }
 
@@ -101,18 +101,8 @@ $_SESSION['last_name']   = $row['last_name'];
 // Route to the right landing page based on role
 // Adjust destination pages as your dashboard grows
 // ------------------------------------------------------------
-switch ($_SESSION['role']) {
-    case 'svp':
-    case 'vp':
-    case 'director':
-    case 'manager':
-        header("Location: Fhome.php");
-        break;
-    case 'employee':
-    default:
-        header("Location: Fhome.php");
-        break;
-}
+// Everyone goes to the main dashboard on login
+header("Location: Fhome.php");
 
 exit();
 ?>
