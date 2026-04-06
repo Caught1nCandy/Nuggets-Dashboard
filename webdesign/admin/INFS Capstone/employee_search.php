@@ -10,19 +10,19 @@ require_once __DIR__ . '/db_config.php';
 
 // Only load filter dropdowns for roles that can actually use them
 // Employees see only themselves so filters are irrelevant
-$showFilters = !in_array($_SESSION['role'], ['employee']);
+$showFilters = true; // All roles get filters
 
-$locations = $showFilters ? $pdo->query("
+$locations = $pdo->query("
     SELECT DISTINCT work_city, state
     FROM location
     ORDER BY work_city
-")->fetchAll() : [];
+")->fetchAll();
 
-$orgs = $showFilters ? $pdo->query("
+$orgs = $pdo->query("
     SELECT org_id, organization_name
     FROM organization
     ORDER BY organization_name
-")->fetchAll() : [];
+")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
