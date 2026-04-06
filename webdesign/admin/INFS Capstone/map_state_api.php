@@ -1,7 +1,6 @@
 <?php
 // map_state_api.php
-// Returns all employees in a given state for the map click modal.
-// Respects the same role-based permissions as search_api.php.
+// Returns scoped employees in a state + total count for out-of-scope calculation
 
 session_start();
 header('Content-Type: application/json');
@@ -25,13 +24,20 @@ if ($state === '') {
     exit;
 }
 
-// Get role scope clause
-$scope  = getScopeClause($myRole, $myId, $pdo);
-$where  = [$scope['sql']];
-$params = $scope['params'];
+// Total employees in this state regardless of scope
+$stmtTotal = $pdo->prepare("
+    SELECT COUNT(*) as total
+    FROM workforce w
+    JOIN location l ON l.location_id = w.location_id
+    WHERE l.state = ?
+");
+$stmtTotal->execute([$state]);
+$totalInState = (int)$stmtTotal->fetch()['total'];
 
-// Add state filter
-$where[]          = 'l.state = :state';
+// Scoped employees in this state
+$scope  = getScopeClause($myRole, $myId, $pdo);
+$where  = [$scope['sql'], 'l.state = :state'];
+$params = $scope['params'];
 $params[':state'] = $state;
 
 // view_level per role
@@ -84,5 +90,11 @@ $stmt = $pdo->prepare("
 ");
 
 $stmt->execute($params);
-echo json_encode($stmt->fetchAll());
-?>
+$employees = $stmt->fetchAll();
+
+echo json_encode([
+    'employees'     => $employees,
+    'total_in_state'=> $totalInState,
+    'scoped_count'  => count($employees),
+    'out_of_scope'  => $totalInState - count($employees),
+]);
