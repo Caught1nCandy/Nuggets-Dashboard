@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$proposal['new_value'], $proposal['employee_id']]);
 
                 $stmt = $pdo->prepare("
-                    INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by, is_revert, reverted_from_log_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
                 ");
                 $stmt->execute([
                     $request_id, $proposal_id, $proposal['employee_id'],
@@ -70,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = "Proposal denied.";
 
     } elseif ($action === 'revert' && $log_id) {
-        // Revert a previously approved change
         $stmt = $pdo->prepare("SELECT * FROM change_log WHERE log_id = ?");
         $stmt->execute([$log_id]);
         $log = $stmt->fetch();
@@ -84,17 +83,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$log['old_value'], $log['employee_id']]);
 
-                // Log the revert as a new change_log entry
+                // Log the revert as a new entry, marking it as a revert
                 $stmt = $pdo->prepare("
-                    INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by, is_revert, reverted_from_log_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                 ");
                 $stmt->execute([
                     $log['request_id'], $log['proposal_id'], $log['employee_id'],
                     $log['table_name'], $log['column_name'],
                     $log['new_value'],  // what it was before revert
-                    $log['old_value'],  // what we're reverting back to
-                    $_SESSION['employee_id']
+                    $log['old_value'],  // what we restored
+                    $_SESSION['employee_id'],
+                    $log_id             // reference to the original log entry
                 ]);
 
                 $pdo->commit();
@@ -145,18 +145,26 @@ $proposed = array_filter($grouped, fn($r) => !empty($r['proposals']));
 $flagged  = array_filter($grouped, fn($r) => $r['request_status'] === 'flagged' && empty($r['proposals']));
 $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending'  && empty($r['proposals']));
 
-// Fetch change history
+// Fetch change history — also get set of log_ids that have been reverted
 $history = $pdo->query("
     SELECT 
         cl.log_id, cl.employee_id, cl.table_name, cl.column_name,
         cl.old_value, cl.new_value, cl.applied_at, cl.applied_by,
-        cl.request_id,
-        ur.employee_name, ur.reason, ur.details
+        cl.request_id, cl.is_revert, cl.reverted_from_log_id,
+        ur.employee_name, ur.reason
     FROM change_log cl
     LEFT JOIN update_requests ur ON ur.id = cl.request_id
     ORDER BY cl.applied_at DESC
     LIMIT 50
 ")->fetchAll();
+
+// Build set of log_ids that have already been reverted
+$reverted_ids = [];
+foreach ($history as $h) {
+    if ($h['is_revert'] && $h['reverted_from_log_id']) {
+        $reverted_ids[] = $h['reverted_from_log_id'];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -178,7 +186,7 @@ $history = $pdo->query("
       display: flex;
       flex-direction: column;
     }
-    .page-content { max-width: 1100px; margin: 40px auto; padding: 0 20px; width: 100%; }
+    .page-content { max-width: 1200px; margin: 40px auto; padding: 0 20px; width: 100%; }
     .section-title { color: white; font-size: 20px; font-weight: 700; margin: 30px 0 12px; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; }
     .alert-success { background: #d4edda; color: #155724; }
@@ -193,11 +201,13 @@ $history = $pdo->query("
     .badge-low     { background: #f8d7da; color: #721c24; }
     .badge-flagged { background: #f8d7da; color: #721c24; }
     .badge-pending { background: #e2e3e5; color: #383d41; }
+    .badge-reverted { background: #fff3cd; color: #856404; }
+    .badge-revert-entry { background: #e8f4fd; color: #0c5460; }
     .reason-tag { display: inline-block; background: var(--purple); color: white; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
     .details-text { font-size: 14px; color: #444; margin-bottom: 14px; line-height: 1.5; background: #f8f9fa; padding: 10px 14px; border-radius: 6px; border-left: 3px solid var(--orange); }
     .proposals-list { display: flex; flex-direction: column; gap: 10px; }
     .change-proposal { background: #f0f0f8; border-radius: 8px; padding: 14px; }
-    .change-proposal h4 { font-size: 13px; font-weight: 700; color: var(--purple); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .change-proposal h4 { font-size: 13px; font-weight: 700; color: var(--purple); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .change-row { display: flex; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; }
     .field-name { font-weight: 700; color: #333; min-width: 120px; }
     .old-val { background: #fde8e8; padding: 3px 8px; border-radius: 4px; color: #900; text-decoration: line-through; }
@@ -212,15 +222,15 @@ $history = $pdo->query("
     .btn-revert  { background: #fd7e14; color: white; }
     .submitted-at { font-size: 12px; color: #999; margin-top: 12px; }
     .empty-state { text-align: center; color: rgba(255,255,255,0.7); padding: 20px; font-size: 14px; }
-
-    /* History table */
     .history-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .history-table th { background: var(--purple); color: white; padding: 10px 14px; text-align: left; font-size: 13px; }
-    .history-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; }
+    .history-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; vertical-align: middle; }
     .history-table tr:last-child td { border-bottom: none; }
     .history-table tr:hover td { background: #f8f8ff; }
-    .revert-val { color: #900; text-decoration: line-through; margin-right: 6px; }
+    .history-table tr.is-revert-row td { background: #f0f8ff; }
+    .revert-val { color: #900; text-decoration: line-through; margin-right: 4px; }
     .applied-val { color: #090; font-weight: 700; }
+    .log-id-tag { color: #999; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -333,6 +343,7 @@ $history = $pdo->query("
     <table class="history-table">
       <thead>
         <tr>
+          <th>Log #</th>
           <th>Employee</th>
           <th>Field</th>
           <th>Change</th>
@@ -343,10 +354,14 @@ $history = $pdo->query("
       </thead>
       <tbody>
         <?php foreach ($history as $h): ?>
-        <tr>
+        <?php $already_reverted = in_array($h['log_id'], $reverted_ids); ?>
+        <tr class="<?= $h['is_revert'] ? 'is-revert-row' : '' ?>">
+          <td>
+            <span class="log-id-tag">#<?= $h['log_id'] ?></span>
+          </td>
           <td>
             <?= htmlspecialchars($h['employee_name'] ?? 'Unknown') ?>
-            <span style="color:#999;font-size:11px;"> #<?= htmlspecialchars($h['employee_id']) ?></span>
+            <br><span style="color:#999;font-size:11px;">#<?= htmlspecialchars($h['employee_id']) ?></span>
           </td>
           <td>
             <strong><?= htmlspecialchars($h['table_name']) ?></strong>.<?= htmlspecialchars($h['column_name']) ?>
@@ -356,14 +371,24 @@ $history = $pdo->query("
             →
             <span class="applied-val"><?= htmlspecialchars($h['new_value'] ?? 'null') ?></span>
           </td>
-          <td><?= htmlspecialchars($h['reason'] ?? '—') ?></td>
+          <td>
+            <?php if ($h['is_revert']): ?>
+              <span class="badge badge-revert-entry">↩ Revert of log #<?= $h['reverted_from_log_id'] ?></span>
+            <?php else: ?>
+              <?= htmlspecialchars($h['reason'] ?? '—') ?>
+            <?php endif; ?>
+          </td>
           <td><?= $h['applied_at'] ?></td>
           <td>
-            <?php if ($h['old_value'] !== null): ?>
-            <form method="POST" onsubmit="return confirm('Revert this change? This will restore the old value.');">
-              <input type="hidden" name="log_id" value="<?= $h['log_id'] ?>">
-              <button type="submit" name="action" value="revert" class="btn btn-revert">↩ Revert</button>
-            </form>
+            <?php if ($h['is_revert']): ?>
+              <span style="color:#999;font-size:12px;">—</span>
+            <?php elseif ($already_reverted): ?>
+              <span class="badge badge-reverted">Reverted</span>
+            <?php elseif ($h['old_value'] !== null): ?>
+              <form method="POST" onsubmit="return confirm('Revert this change? This will restore the previous value.');">
+                <input type="hidden" name="log_id" value="<?= $h['log_id'] ?>">
+                <button type="submit" name="action" value="revert" class="btn btn-revert">↩ Revert</button>
+              </form>
             <?php else: ?>
               <span style="color:#999;font-size:12px;">Cannot revert</span>
             <?php endif; ?>
