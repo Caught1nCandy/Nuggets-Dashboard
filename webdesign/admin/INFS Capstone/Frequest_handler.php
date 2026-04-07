@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/config/api_config.php';
+require_once __DIR__ . '/db_config.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name    = trim($_POST['employee_name']);
@@ -31,16 +32,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         die("Execute failed: " . $stmt->error);
     }
 
-    // Get the new request ID
     $new_request_id = $stmt->insert_id;
-
     $stmt->close();
     $conn->close();
 
-    // --- Try to ping OpenClaw immediately via Tailscale (fire and forget) ---
-    // If VM is off, this times out silently after 3 seconds.
-    // OpenClaw will pick it up on next boot via cron job.
-    if (function_exists('curl_init')) {
+    // --- Check if processing is paused ---
+    $paused_row = $pdo->query("SELECT setting_value FROM settings WHERE setting_key = 'processing_paused'")->fetch();
+    $is_paused  = $paused_row && $paused_row['setting_value'] === '1';
+
+    // --- Fire webhook only if not paused ---
+    if (!$is_paused && function_exists('curl_init')) {
         $webhook_url = 'http://' . OPENCLAW_TAILSCALE_IP . ':18791/webhook/new-request';
         $payload = json_encode([
             'event'      => 'new_update_request',
