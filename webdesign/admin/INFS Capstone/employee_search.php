@@ -557,7 +557,7 @@ $orgs = $pdo->query("
       <input
         type="text"
         id="search-input"
-        placeholder="Begin typing a name, role, or employee ID..."
+        placeholder="Search by name or employee ID..."
         autocomplete="off"
       />
     </div>
@@ -702,11 +702,7 @@ function fetchResults() {
   const org      = document.getElementById('filter-org')      ? document.getElementById('filter-org').value      : '';
   const role     = document.getElementById('filter-role')     ? document.getElementById('filter-role').value     : '';
 
-  if (!q && !location && !org && !role) {
-    resultsList.innerHTML = `<div class="state-msg"><div class="big">&#128269;</div>Start typing to search employees</div>`;
-    resultsCount.innerHTML = '';
-    return;
-  }
+  // No early return — always fetch so results show on load
 
   resultsList.innerHTML = `<div class="state-msg">Searching...</div>`;
 
@@ -907,6 +903,9 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Search event listeners ─────────────────────────────────
+
+// Load all results immediately on page load
+fetchResults();
 
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
