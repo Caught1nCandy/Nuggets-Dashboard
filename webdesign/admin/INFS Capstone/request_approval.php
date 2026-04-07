@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action      = $_POST['action']      ?? '';
     $proposal_id = $_POST['proposal_id'] ?? '';
     $request_id  = $_POST['request_id']  ?? '';
+    $log_id      = $_POST['log_id']      ?? '';
 
     if ($action === 'approve' && $proposal_id && $request_id) {
         $stmt = $pdo->prepare("SELECT * FROM proposed_changes WHERE proposal_id = ?");
@@ -22,12 +23,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // Apply the change
                 $sql = "UPDATE {$proposal['table_name']} SET {$proposal['column_name']} = ? WHERE employee_id = ?";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$proposal['new_value'], $proposal['employee_id']]);
 
-                // Log it
                 $stmt = $pdo->prepare("
                     INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -39,11 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['employee_id']
                 ]);
 
-                // Mark this proposal approved
                 $stmt = $pdo->prepare("UPDATE proposed_changes SET status = 'approved', reviewed_at = NOW() WHERE proposal_id = ?");
                 $stmt->execute([$proposal_id]);
 
-                // Only complete the request if ALL proposals are reviewed
                 $stmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM proposed_changes WHERE request_id = ? AND status = 'pending_approval'");
                 $stmt->execute([$request_id]);
                 if ($stmt->fetch()['remaining'] == 0) {
@@ -63,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE proposed_changes SET status = 'denied', reviewed_at = NOW() WHERE proposal_id = ?");
         $stmt->execute([$proposal_id]);
 
-        // Only complete the request if ALL proposals are reviewed
         $stmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM proposed_changes WHERE request_id = ? AND status = 'pending_approval'");
         $stmt->execute([$request_id]);
         if ($stmt->fetch()['remaining'] == 0) {
@@ -72,10 +68,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $success = "Proposal denied.";
+
+    } elseif ($action === 'revert' && $log_id) {
+        // Revert a previously approved change
+        $stmt = $pdo->prepare("SELECT * FROM change_log WHERE log_id = ?");
+        $stmt->execute([$log_id]);
+        $log = $stmt->fetch();
+
+        if ($log) {
+            try {
+                $pdo->beginTransaction();
+
+                // Write old value back
+                $sql = "UPDATE {$log['table_name']} SET {$log['column_name']} = ? WHERE employee_id = ?";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$log['old_value'], $log['employee_id']]);
+
+                // Log the revert as a new change_log entry
+                $stmt = $pdo->prepare("
+                    INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $log['request_id'], $log['proposal_id'], $log['employee_id'],
+                    $log['table_name'], $log['column_name'],
+                    $log['new_value'],  // what it was before revert
+                    $log['old_value'],  // what we're reverting back to
+                    $_SESSION['employee_id']
+                ]);
+
+                $pdo->commit();
+                $success = "Change reverted successfully.";
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = "Revert failed: " . $e->getMessage();
+            }
+        }
     }
 }
 
-// Fetch all pending proposals grouped by request
+// Fetch pending proposals grouped by request
 $stmt = $pdo->query("
     SELECT 
         ur.id AS request_id, ur.employee_name, ur.employee_id, ur.reason,
@@ -89,7 +121,6 @@ $stmt = $pdo->query("
 ");
 $rows = $stmt->fetchAll();
 
-// Group by request
 $grouped = [];
 foreach ($rows as $row) {
     $rid = $row['request_id'];
@@ -113,6 +144,19 @@ foreach ($rows as $row) {
 $proposed = array_filter($grouped, fn($r) => !empty($r['proposals']));
 $flagged  = array_filter($grouped, fn($r) => $r['request_status'] === 'flagged' && empty($r['proposals']));
 $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending'  && empty($r['proposals']));
+
+// Fetch change history
+$history = $pdo->query("
+    SELECT 
+        cl.log_id, cl.employee_id, cl.table_name, cl.column_name,
+        cl.old_value, cl.new_value, cl.applied_at, cl.applied_by,
+        cl.request_id,
+        ur.employee_name, ur.reason, ur.details
+    FROM change_log cl
+    LEFT JOIN update_requests ur ON ur.id = cl.request_id
+    ORDER BY cl.applied_at DESC
+    LIMIT 50
+")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -165,8 +209,18 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
     .btn:hover { opacity: 0.85; }
     .btn-approve { background: #28a745; color: white; }
     .btn-deny    { background: #dc3545; color: white; }
+    .btn-revert  { background: #fd7e14; color: white; }
     .submitted-at { font-size: 12px; color: #999; margin-top: 12px; }
     .empty-state { text-align: center; color: rgba(255,255,255,0.7); padding: 20px; font-size: 14px; }
+
+    /* History table */
+    .history-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .history-table th { background: var(--purple); color: white; padding: 10px 14px; text-align: left; font-size: 13px; }
+    .history-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; }
+    .history-table tr:last-child td { border-bottom: none; }
+    .history-table tr:hover td { background: #f8f8ff; }
+    .revert-val { color: #900; text-decoration: line-through; margin-right: 6px; }
+    .applied-val { color: #090; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -182,6 +236,7 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
     <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
   <?php endif; ?>
 
+  <!-- AWAITING APPROVAL -->
   <div class="section-title">⏳ Awaiting Your Approval (<?= count($proposed) ?>)</div>
   <?php if (empty($proposed)): ?>
     <div class="empty-state">No proposed changes waiting for approval.</div>
@@ -196,7 +251,6 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
       </div>
       <span class="reason-tag"><?= htmlspecialchars($r['reason']) ?></span>
       <div class="details-text">"<?= htmlspecialchars($r['details']) ?>"</div>
-
       <div class="proposals-list">
         <?php foreach ($r['proposals'] as $p): ?>
         <div class="change-proposal">
@@ -229,6 +283,7 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
     <?php endforeach; ?>
   <?php endif; ?>
 
+  <!-- FLAGGED -->
   <div class="section-title">🚩 Flagged — Too Ambiguous (<?= count($flagged) ?>)</div>
   <?php if (empty($flagged)): ?>
     <div class="empty-state">No flagged requests.</div>
@@ -249,6 +304,7 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
     <?php endforeach; ?>
   <?php endif; ?>
 
+  <!-- PENDING -->
   <div class="section-title">🕐 Pending Processing (<?= count($pending) ?>)</div>
   <?php if (empty($pending)): ?>
     <div class="empty-state">No pending requests.</div>
@@ -267,6 +323,55 @@ $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending' 
       <div class="submitted-at">Submitted <?= $r['submitted_at'] ?></div>
     </div>
     <?php endforeach; ?>
+  <?php endif; ?>
+
+  <!-- CHANGE HISTORY -->
+  <div class="section-title">📋 Change History (<?= count($history) ?>)</div>
+  <?php if (empty($history)): ?>
+    <div class="empty-state">No changes have been applied yet.</div>
+  <?php else: ?>
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Field</th>
+          <th>Change</th>
+          <th>Reason</th>
+          <th>Applied At</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($history as $h): ?>
+        <tr>
+          <td>
+            <?= htmlspecialchars($h['employee_name'] ?? 'Unknown') ?>
+            <span style="color:#999;font-size:11px;"> #<?= htmlspecialchars($h['employee_id']) ?></span>
+          </td>
+          <td>
+            <strong><?= htmlspecialchars($h['table_name']) ?></strong>.<?= htmlspecialchars($h['column_name']) ?>
+          </td>
+          <td>
+            <span class="revert-val"><?= htmlspecialchars($h['old_value'] ?? 'null') ?></span>
+            →
+            <span class="applied-val"><?= htmlspecialchars($h['new_value'] ?? 'null') ?></span>
+          </td>
+          <td><?= htmlspecialchars($h['reason'] ?? '—') ?></td>
+          <td><?= $h['applied_at'] ?></td>
+          <td>
+            <?php if ($h['old_value'] !== null): ?>
+            <form method="POST" onsubmit="return confirm('Revert this change? This will restore the old value.');">
+              <input type="hidden" name="log_id" value="<?= $h['log_id'] ?>">
+              <button type="submit" name="action" value="revert" class="btn btn-revert">↩ Revert</button>
+            </form>
+            <?php else: ?>
+              <span style="color:#999;font-size:12px;">Cannot revert</span>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
   <?php endif; ?>
 
 </div>
