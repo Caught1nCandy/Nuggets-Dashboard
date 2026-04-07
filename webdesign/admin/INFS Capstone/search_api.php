@@ -20,10 +20,7 @@ $org      = trim($_GET['org']      ?? '');
 $tenure   = trim($_GET['tenure']   ?? '');
 $role     = trim($_GET['role']     ?? '');
 
-if (strlen($query) < 1 && !$location && !$org && !$tenure && !$role) {
-    echo json_encode([]);
-    exit;
-}
+// No early exit — empty query returns everyone in scope
 
 // ── Role scope from permissions.php ────────────────────────
 $scope  = getScopeClause($myRole, $myId, $pdo);
