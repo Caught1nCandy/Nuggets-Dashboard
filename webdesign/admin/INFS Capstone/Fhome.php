@@ -183,12 +183,14 @@ include __DIR__ . '/navbar.php';
         <div class="snapshot-role"><?php echo htmlspecialchars($myDetails['title'] ?? $myDetails['role']); ?></div>
       </div>
     </div>
+    <?php if ($myRole !== 'sysadmin'): ?>
     <div class="snapshot-details">
       <div class="detail-item"><label>Department</label><span><?php echo htmlspecialchars($myDetails['organization_name'] ?? '—'); ?></span></div>
       <div class="detail-item"><label>Location</label><span><?php echo htmlspecialchars(($myDetails['work_city'] ?? '') . ($myDetails['state'] ? ', '.$myDetails['state'] : '')); ?></span></div>
       <div class="detail-item"><label>Manager</label><span><?php echo htmlspecialchars(trim(($myDetails['manager_first'] ?? '') . ' ' . ($myDetails['manager_last'] ?? '')) ?: '—'); ?></span></div>
       <div class="detail-item"><label>Tenure</label><span><?php echo htmlspecialchars($myDetails['tenure'] ?? '—'); ?><?php echo $myDetails['tenure'] !== null ? ' Years' : ''; ?></span></div>
     </div>
+    <?php endif; ?>
   </div>
 
   <?php if ($myRole !== 'employee'): ?>
