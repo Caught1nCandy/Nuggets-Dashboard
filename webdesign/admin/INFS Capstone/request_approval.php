@@ -7,6 +7,7 @@ if (!isset($_SESSION['authorized']) || !isset($_SESSION['is_sysadmin']) || !$_SE
 }
 
 require_once 'db_config.php';
+require_once __DIR__ . '/config/api_config.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action      = $_POST['action']      ?? '';
@@ -14,7 +15,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $request_id  = $_POST['request_id']  ?? '';
     $log_id      = $_POST['log_id']      ?? '';
 
-    if ($action === 'approve' && $proposal_id && $request_id) {
+    // ── Pause/Play toggle ────────────────────────────────────
+    if ($action === 'pause') {
+        $pdo->exec("UPDATE settings SET setting_value = '1' WHERE setting_key = 'processing_paused'");
+        $success = "Processing paused. New requests will queue up until you resume.";
+
+    } elseif ($action === 'play') {
+        $pdo->exec("UPDATE settings SET setting_value = '0' WHERE setting_key = 'processing_paused'");
+        
+        // Immediately fire the webhook to process queued requests
+        if (function_exists('curl_init')) {
+            $webhook_url = 'http://' . OPENCLAW_TAILSCALE_IP . ':18791/webhook/new-request';
+            $ch = curl_init($webhook_url);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['event' => 'manual_trigger']));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+        $success = "Processing resumed! Queued requests are now being processed.";
+
+    // ── Approve ──────────────────────────────────────────────
+    } elseif ($action === 'approve' && $proposal_id && $request_id) {
         $stmt = $pdo->prepare("SELECT * FROM proposed_changes WHERE proposal_id = ?");
         $stmt->execute([$proposal_id]);
         $proposal = $stmt->fetch();
@@ -56,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+    // ── Deny ─────────────────────────────────────────────────
     } elseif ($action === 'deny' && $proposal_id && $request_id) {
         $stmt = $pdo->prepare("UPDATE proposed_changes SET status = 'denied', reviewed_at = NOW() WHERE proposal_id = ?");
         $stmt->execute([$proposal_id]);
@@ -66,9 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE update_requests SET status = 'completed', processed_at = NOW() WHERE id = ?");
             $stmt->execute([$request_id]);
         }
-
         $success = "Proposal denied.";
 
+    // ── Revert ───────────────────────────────────────────────
     } elseif ($action === 'revert' && $log_id) {
         $stmt = $pdo->prepare("SELECT * FROM change_log WHERE log_id = ?");
         $stmt->execute([$log_id]);
@@ -78,12 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // Write old value back
                 $sql = "UPDATE {$log['table_name']} SET {$log['column_name']} = ? WHERE employee_id = ?";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$log['old_value'], $log['employee_id']]);
 
-                // Log the revert as a new entry, marking it as a revert
                 $stmt = $pdo->prepare("
                     INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by, is_revert, reverted_from_log_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -91,10 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([
                     $log['request_id'], $log['proposal_id'], $log['employee_id'],
                     $log['table_name'], $log['column_name'],
-                    $log['new_value'],  // what it was before revert
-                    $log['old_value'],  // what we restored
-                    $_SESSION['employee_id'],
-                    $log_id             // reference to the original log entry
+                    $log['new_value'], $log['old_value'],
+                    $_SESSION['employee_id'], $log_id
                 ]);
 
                 $pdo->commit();
@@ -106,6 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Get current pause state
+$paused_row = $pdo->query("SELECT setting_value FROM settings WHERE setting_key = 'processing_paused'")->fetch();
+$is_paused  = $paused_row && $paused_row['setting_value'] === '1';
 
 // Fetch pending proposals grouped by request
 $stmt = $pdo->query("
@@ -145,7 +170,7 @@ $proposed = array_filter($grouped, fn($r) => !empty($r['proposals']));
 $flagged  = array_filter($grouped, fn($r) => $r['request_status'] === 'flagged' && empty($r['proposals']));
 $pending  = array_filter($grouped, fn($r) => $r['request_status'] === 'pending'  && empty($r['proposals']));
 
-// Fetch change history — also get set of log_ids that have been reverted
+// Fetch change history
 $history = $pdo->query("
     SELECT 
         cl.log_id, cl.employee_id, cl.table_name, cl.column_name,
@@ -158,7 +183,6 @@ $history = $pdo->query("
     LIMIT 50
 ")->fetchAll();
 
-// Build set of log_ids that have already been reverted
 $reverted_ids = [];
 foreach ($history as $h) {
     if ($h['is_revert'] && $h['reverted_from_log_id']) {
@@ -196,11 +220,11 @@ foreach ($history as $h) {
     .card-header .employee-info h3 { font-size: 16px; font-weight: 700; color: var(--purple); }
     .card-header .employee-info span { font-size: 13px; color: #666; }
     .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    .badge-high    { background: #d4edda; color: #155724; }
-    .badge-medium  { background: #fff3cd; color: #856404; }
-    .badge-low     { background: #f8d7da; color: #721c24; }
-    .badge-flagged { background: #f8d7da; color: #721c24; }
-    .badge-pending { background: #e2e3e5; color: #383d41; }
+    .badge-high     { background: #d4edda; color: #155724; }
+    .badge-medium   { background: #fff3cd; color: #856404; }
+    .badge-low      { background: #f8d7da; color: #721c24; }
+    .badge-flagged  { background: #f8d7da; color: #721c24; }
+    .badge-pending  { background: #e2e3e5; color: #383d41; }
     .badge-reverted { background: #fff3cd; color: #856404; }
     .badge-revert-entry { background: #e8f4fd; color: #0c5460; }
     .reason-tag { display: inline-block; background: var(--purple); color: white; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
@@ -220,6 +244,8 @@ foreach ($history as $h) {
     .btn-approve { background: #28a745; color: white; }
     .btn-deny    { background: #dc3545; color: white; }
     .btn-revert  { background: #fd7e14; color: white; }
+    .btn-pause   { background: #dc3545; color: white; padding: 10px 24px; font-size: 15px; }
+    .btn-play    { background: #28a745; color: white; padding: 10px 24px; font-size: 15px; }
     .submitted-at { font-size: 12px; color: #999; margin-top: 12px; }
     .empty-state { text-align: center; color: rgba(255,255,255,0.7); padding: 20px; font-size: 14px; }
     .history-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
@@ -231,6 +257,29 @@ foreach ($history as $h) {
     .revert-val { color: #900; text-decoration: line-through; margin-right: 4px; }
     .applied-val { color: #090; font-weight: 700; }
     .log-id-tag { color: #999; font-size: 11px; }
+
+    /* Pause/Play banner */
+    .processing-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .processing-banner.paused {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffc107;
+    }
+    .processing-banner.active {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #28a745;
+    }
+    .banner-left { display: flex; align-items: center; gap: 10px; }
   </style>
 </head>
 <body>
@@ -245,6 +294,24 @@ foreach ($history as $h) {
   <?php if (!empty($error)): ?>
     <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
   <?php endif; ?>
+
+  <!-- PAUSE / PLAY BANNER -->
+  <div class="processing-banner <?= $is_paused ? 'paused' : 'active' ?>">
+    <div class="banner-left">
+      <?php if ($is_paused): ?>
+        ⏸ AI Processing is <strong>PAUSED</strong> — new requests are queuing up and will be processed when you resume.
+      <?php else: ?>
+        ▶ AI Processing is <strong>ACTIVE</strong> — new requests are processed automatically.
+      <?php endif; ?>
+    </div>
+    <form method="POST">
+      <?php if ($is_paused): ?>
+        <button type="submit" name="action" value="play" class="btn btn-play">▶ Resume Processing</button>
+      <?php else: ?>
+        <button type="submit" name="action" value="pause" class="btn btn-pause">⏸ Pause Processing</button>
+      <?php endif; ?>
+    </form>
+  </div>
 
   <!-- AWAITING APPROVAL -->
   <div class="section-title">⏳ Awaiting Your Approval (<?= count($proposed) ?>)</div>
@@ -356,16 +423,12 @@ foreach ($history as $h) {
         <?php foreach ($history as $h): ?>
         <?php $already_reverted = in_array($h['log_id'], $reverted_ids); ?>
         <tr class="<?= $h['is_revert'] ? 'is-revert-row' : '' ?>">
-          <td>
-            <span class="log-id-tag">#<?= $h['log_id'] ?></span>
-          </td>
+          <td><span class="log-id-tag">#<?= $h['log_id'] ?></span></td>
           <td>
             <?= htmlspecialchars($h['employee_name'] ?? 'Unknown') ?>
             <br><span style="color:#999;font-size:11px;">#<?= htmlspecialchars($h['employee_id']) ?></span>
           </td>
-          <td>
-            <strong><?= htmlspecialchars($h['table_name']) ?></strong>.<?= htmlspecialchars($h['column_name']) ?>
-          </td>
+          <td><strong><?= htmlspecialchars($h['table_name']) ?></strong>.<?= htmlspecialchars($h['column_name']) ?></td>
           <td>
             <span class="revert-val"><?= htmlspecialchars($h['old_value'] ?? 'null') ?></span>
             →
