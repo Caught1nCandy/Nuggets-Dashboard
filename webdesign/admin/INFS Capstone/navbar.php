@@ -16,6 +16,7 @@ $navPages = [
     'events'   => ['label' => 'Events',           'href' => 'events.php',           'roles' => ['all']],
     'request'  => ['label' => 'Update Request',   'href' => 'Frequest.php',         'roles' => ['manager','director','vp','svp','sysadmin']],
     'approval' => ['label' => 'Request Approval', 'href' => 'request_approval.php', 'roles' => ['sysadmin']],
+    'aic'      => ['label' => 'AIC',              'href' => 'aic.php',              'roles' => ['vp', 'svp', 'sysadmin']],
 ];
 
 $displayName = htmlspecialchars(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
