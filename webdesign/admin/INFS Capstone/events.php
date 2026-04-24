@@ -459,6 +459,6 @@ function closeEvModal() {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEvModal(); });
 </script>
-
+<?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
