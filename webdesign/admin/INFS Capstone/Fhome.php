@@ -347,6 +347,6 @@ new Chart(document.getElementById('empPerMgrChart'), {
 
 <?php endif; ?>
 </script>
-
+<?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
