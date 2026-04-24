@@ -27,6 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $body = json_decode(file_get_contents('php://input'), true);
 $question = trim($body['question'] ?? '');
 
+// ── Handle clear ──────────────────────────────────────────────
+if ($question === '__clear__') {
+    $_SESSION['chat_history'] = [];
+    echo json_encode(['ok' => true]);
+    exit();
+}
+
+// ── Validate question ─────────────────────────────────────────
 if (empty($question)) {
     http_response_code(400);
     echo json_encode(['error' => 'No question provided']);
