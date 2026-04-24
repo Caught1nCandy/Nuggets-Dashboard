@@ -925,6 +925,6 @@ function clearFilters() {
   fetchResults();
 }
 </script>
-
+<?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
