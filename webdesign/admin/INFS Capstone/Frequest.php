@@ -205,6 +205,6 @@ if ($_SESSION['role'] === 'employee') {
       counter.textContent = textarea.value.length + " / 500";
     }
   </script>
-
+<?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
