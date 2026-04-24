@@ -390,5 +390,6 @@ $total = array_sum($stateData);
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStateModal(); });
   </script>
+    <?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
