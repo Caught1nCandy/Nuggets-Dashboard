@@ -44,7 +44,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 if (!$is_paused && function_exists('curl_init')) {
     $webhook_url = 'http://127.0.0.1:18789/hooks/agent';
     $payload = json_encode([
-        'message' => "New update request submitted (ID: {$new_request_id}). Check the update_requests table and process any pending requests according to your SKILL.md.",
+  'message' => "A new update request was submitted (ID: {$new_request_id}). Process ALL pending requests from the update_requests table where status = 'pending'. Follow your SKILL.md instructions for each one.",
         'name'    => 'UpdateRequestTrigger',
     ]);
     $ch = curl_init($webhook_url);
