@@ -48,7 +48,7 @@ if (isset($_GET['search'])) {
         echo json_encode([]);
         exit();
     }
-    $stmt = $pdo->prepare("
+$stmt = $pdo->prepare("
         SELECT w.employee_id, w.first_name, w.last_name, w.role,
                o.organization_name
         FROM workforce w
@@ -57,11 +57,13 @@ if (isset($_GET['search'])) {
            OR w.last_name  LIKE ?
            OR w.employee_id LIKE ?
            OR CONCAT(w.first_name, ' ', w.last_name) LIKE ?
-        ORDER BY w.last_name, w.first_name
+        ORDER BY
+          CASE WHEN LOWER(w.first_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
+          w.last_name, w.first_name
         LIMIT 10
     ");
     $like = "%{$q}%";
-    $stmt->execute([$like, $like, $like, $like]);
+    $stmt->execute([$like, $like, $like, $like, $like]);
     echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
     exit();
 }
