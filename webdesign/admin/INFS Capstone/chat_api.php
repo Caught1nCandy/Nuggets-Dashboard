@@ -62,7 +62,9 @@ $stmt->execute([$_SESSION['employee_id']]);
 $employee = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Sysadmin bypass — not in workforce table
-$is_sysadmin = isset($_SESSION['is_sysadmin']) && $_SESSION['is_sysadmin'];
+// True sysadmin = is_sysadmin flag AND employee_id is '0'
+// If is_sysadmin but employee_id is not '0', we're impersonating — use the impersonated role
+$is_sysadmin = isset($_SESSION['is_sysadmin']) && $_SESSION['is_sysadmin'] && $_SESSION['employee_id'] === '0';
 
 if (!$employee && !$is_sysadmin) {
     http_response_code(403);
