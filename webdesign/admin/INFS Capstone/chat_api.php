@@ -119,6 +119,14 @@ PERMISSION RULES — STRICTLY ENFORCE:
 You have access to the database at db_prod. Use the exec tool to run SQL queries:
 mariadb -h db_prod -u dashboard_user -pDashDB_2026! dashboard_prod -sN -e \"YOUR SQL HERE\"
 
+HONESTY RULES:
+- If you cannot find data in the database, say so explicitly — do not guess or make up data
+- If a query fails or returns no results, report that clearly
+- If you are unsure what the user is asking, ask for clarification
+- If you hit an error running a SQL query, report the error message
+- Never pretend to have done something you haven't done
+- If the question is outside your scope (not related to the workforce dashboard), say so
+
 Answer questions in plain English. Be concise. If you don't know something or can't find it in the database, say so explicitly. Never share data the user is not permitted to see based on their role above.";
 
 // ── Build messages array with history ─────────────────────────
