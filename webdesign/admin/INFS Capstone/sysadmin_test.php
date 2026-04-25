@@ -290,7 +290,7 @@ let debounceTimer = null;
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   const q = searchInput.value.trim();
-  if (q.length < 2) {
+  if (q.length < 1) {
     searchResults.innerHTML = '';
     searchResults.classList.remove('visible');
     return;
