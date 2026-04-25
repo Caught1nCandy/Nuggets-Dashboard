@@ -138,12 +138,17 @@ $messages[] = ['role' => 'user', 'content' => $question];
 // We reach it via its REST API
 require_once __DIR__ . '/config/api_config.php';
 
-$openclaw_url = 'http://127.0.0.1:18789/api/chat';
+$openclaw_url = 'http://openclaw:18789/v1/chat/completions';
 
+$allMessages = array_merge(
+    [['role' => 'system', 'content' => $systemPrompt]],
+    $messages
+);
 $payload = json_encode([
-    'messages'      => $messages,
-    'system'        => $systemPrompt,
-    'stream'        => false,
+    'model'    => 'openclaw/default',
+    'messages' => $allMessages,
+    'stream'   => false,
+    'user'     => $_SESSION['employee_id'],
 ]);
 
 $ch = curl_init($openclaw_url);
