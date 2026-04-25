@@ -80,10 +80,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-    // ── Deny ─────────────────────────────────────────────────
+// ── Deny ─────────────────────────────────────────────────
     } elseif ($action === 'deny' && $proposal_id && $request_id) {
         $stmt = $pdo->prepare("UPDATE proposed_changes SET status = 'denied', reviewed_at = NOW() WHERE proposal_id = ?");
         $stmt->execute([$proposal_id]);
+
+        // Log the denial to change_log for record keeping
+        $stmt2 = $pdo->prepare("SELECT * FROM proposed_changes WHERE proposal_id = ?");
+        $stmt2->execute([$proposal_id]);
+        $denied = $stmt2->fetch();
+        if ($denied) {
+            $stmt3 = $pdo->prepare("
+                INSERT INTO change_log (request_id, proposal_id, employee_id, table_name, column_name, old_value, new_value, applied_by, is_revert, reverted_from_log_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+            ");
+            $stmt3->execute([
+                $request_id, $proposal_id, $denied['employee_id'],
+                $denied['table_name'], $denied['column_name'],
+                $denied['old_value'], $denied['new_value'],
+                $_SESSION['employee_id']
+            ]);
+        }
 
         $stmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM proposed_changes WHERE request_id = ? AND status = 'pending_approval'");
         $stmt->execute([$request_id]);
@@ -92,7 +109,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$request_id]);
         }
         $success = "Proposal denied.";
-
     // ── Revert ───────────────────────────────────────────────
     } elseif ($action === 'revert' && $log_id) {
         $stmt = $pdo->prepare("SELECT * FROM change_log WHERE log_id = ?");
