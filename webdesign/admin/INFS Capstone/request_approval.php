@@ -463,5 +463,6 @@ foreach ($history as $h) {
   <?php endif; ?>
 
 </div>
+    <?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
