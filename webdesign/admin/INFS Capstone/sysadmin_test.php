@@ -127,41 +127,6 @@ $currentId       = $_SESSION['employee_id'];
     .card-header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .card-body { padding: 20px; }
 
-    /* ── Search box ── */
-    .search-wrap { position: relative; margin-bottom: 20px; }
-    .search-wrap input {
-      width: 100%; padding: 11px 16px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 14px; font-family: 'Open Sans', sans-serif;
-      outline: none; transition: border-color 0.15s;
-    }
-    .search-wrap input:focus { border-color: var(--purple); }
-    .search-results {
-      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-      background: white; border: 1px solid var(--border); border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 100;
-      max-height: 300px; overflow-y: auto; display: none;
-    }
-    .search-results.visible { display: block; }
-    .search-result-item {
-      padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
-      display: flex; align-items: center; justify-content: space-between;
-      transition: background 0.1s;
-    }
-    .search-result-item:last-child { border-bottom: none; }
-    .search-result-item:hover { background: #f8f6ff; }
-    .result-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .result-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
-    .result-role {
-      font-size: 11px; font-weight: 700; padding: 2px 8px;
-      border-radius: 4px; text-transform: uppercase; flex-shrink: 0;
-    }
-    .result-role.employee  { background: #ede0f8; color: var(--purple); }
-    .result-role.manager   { background: #fff0e6; color: var(--orange); }
-    .result-role.director  { background: #e6f0ff; color: #1a56c4; }
-    .result-role.vp        { background: #e6faf0; color: #1a7a4a; }
-    .result-role.svp       { background: #fff8e6; color: #b07000; }
-    .search-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
-
     /* ── Role grid ── */
     .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
     .role-panel { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -183,11 +148,43 @@ $currentId       = $_SESSION['employee_id'];
     .role-panel .impersonate-btn:hover { opacity: 0.75; }
     .role-panel .impersonate-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* Hidden impersonate form for search results */
+    /* ── Search box ── */
+    .search-wrap { margin-bottom: 4px; }
+    .search-wrap input {
+      width: 100%; padding: 11px 16px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px; font-family: 'Open Sans', sans-serif;
+      outline: none; transition: border-color 0.15s;
+    }
+    .search-wrap input:focus { border-color: var(--purple); }
+    .search-results {
+      background: white; border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      margin-top: 4px;
+      display: none;
+    }
+    .search-results.visible { display: block; }
+    .search-result-item {
+      padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: background 0.1s;
+    }
+    .search-result-item:last-child { border-bottom: none; }
+    .search-result-item:hover { background: #f8f6ff; }
+    .result-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .result-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .result-role { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; flex-shrink: 0; }
+    .result-role.employee  { background: #ede0f8; color: var(--purple); }
+    .result-role.manager   { background: #fff0e6; color: var(--orange); }
+    .result-role.director  { background: #e6f0ff; color: #1a56c4; }
+    .result-role.vp        { background: #e6faf0; color: #1a7a4a; }
+    .result-role.svp       { background: #fff8e6; color: #b07000; }
+    .search-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
     #search-impersonate-form { display: none; }
   </style>
 </head>
 <body>
+
 <div class="site-header">
   <span class="page-title">&#9881; Sysadmin Test Panel</span>
   <span class="badge">Testing Only</span>
@@ -217,26 +214,6 @@ $currentId       = $_SESSION['employee_id'];
       </form>
     <?php endif; ?>
   </div>
-
-  <!-- Quick search card -->
-  <div class="card">
-    <div class="card-header">
-      <h2>🔍 Quick Search</h2>
-      <p>Search by name or employee ID and impersonate instantly.</p>
-    </div>
-    <div class="card-body">
-      <div class="search-wrap">
-        <input type="text" id="emp-search" placeholder="Type a name or employee ID..." autocomplete="off">
-        <div class="search-results" id="search-results"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Hidden form for search impersonation -->
-  <form method="POST" id="search-impersonate-form">
-    <input type="hidden" name="action" value="impersonate">
-    <input type="hidden" name="employee_id" id="search-emp-id">
-  </form>
 
   <!-- Role panels -->
   <div class="card">
@@ -280,7 +257,27 @@ $currentId       = $_SESSION['employee_id'];
     </div>
   </div>
 
+  <!-- Quick search card -->
+  <div class="card">
+    <div class="card-header">
+      <h2>🔍 Quick Search</h2>
+      <p>Search by name or employee ID and click a result to impersonate instantly.</p>
+    </div>
+    <div class="card-body">
+      <div class="search-wrap">
+        <input type="text" id="emp-search" placeholder="Type a name or employee ID..." autocomplete="off">
+        <div class="search-results" id="search-results"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<!-- Hidden form for search impersonation -->
+<form method="POST" id="search-impersonate-form">
+  <input type="hidden" name="action" value="impersonate">
+  <input type="hidden" name="employee_id" id="search-emp-id">
+</form>
 
 <script>
 const searchInput   = document.getElementById('emp-search');
@@ -299,14 +296,6 @@ searchInput.addEventListener('input', () => {
     return;
   }
   debounceTimer = setTimeout(() => fetchResults(q), 250);
-});
-
-searchInput.addEventListener('blur', () => {
-  setTimeout(() => searchResults.classList.remove('visible'), 150);
-});
-
-searchInput.addEventListener('focus', () => {
-  if (searchResults.children.length > 0) searchResults.classList.add('visible');
 });
 
 async function fetchResults(q) {
@@ -338,5 +327,6 @@ function impersonate(empId) {
   searchForm.submit();
 }
 </script>
+
 </body>
 </html>
