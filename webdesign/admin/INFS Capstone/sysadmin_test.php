@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 if (isset($_GET['search'])) {
     header('Content-Type: application/json');
     $q = trim($_GET['search']);
-    if (strlen($q) < 2) {
+    if (strlen($q) < 1) {
         echo json_encode([]);
         exit();
     }
