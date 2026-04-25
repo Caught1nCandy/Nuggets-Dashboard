@@ -167,7 +167,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Authorization: Bearer ' . OPENCLAW_GATEWAY_TOKEN,
 ]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 60); // AI can take a moment
+curl_setopt($ch, CURLOPT_TIMEOUT, 120); // AI can take a moment
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
