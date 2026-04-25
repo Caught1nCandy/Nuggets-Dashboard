@@ -42,7 +42,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 // --- Fire webhook only if not paused ---
 if (!$is_paused && function_exists('curl_init')) {
-    $webhook_url = 'http://127.0.0.1:18789/hooks/agent';
+    $webhook_url = 'http://openclaw:18789/hooks/agent';
     $payload = json_encode([
         'message' => "New update request submitted (ID: {$new_request_id}). Check the update_requests table and process any pending requests according to your SKILL.md.",
         'name'    => 'UpdateRequestTrigger',
@@ -56,8 +56,10 @@ if (!$is_paused && function_exists('curl_init')) {
     ]);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-    curl_exec($ch);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    error_log("OpenClaw webhook response: " . $response . " HTTP: " . $httpCode);
 }
 
     // Store sanitized copy for success page display
