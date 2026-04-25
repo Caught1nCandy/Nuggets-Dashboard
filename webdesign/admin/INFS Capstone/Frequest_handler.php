@@ -40,23 +40,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $paused_row = $pdo->query("SELECT setting_value FROM settings WHERE setting_key = 'processing_paused'")->fetch();
     $is_paused  = $paused_row && $paused_row['setting_value'] === '1';
 
-    // --- Fire webhook only if not paused ---
-    if (!$is_paused && function_exists('curl_init')) {
-        $webhook_url = 'http://' . OPENCLAW_TAILSCALE_IP . ':18791/webhook/new-request';
-        $payload = json_encode([
-            'event'      => 'new_update_request',
-            'request_id' => $new_request_id,
-            'api_key'    => OPENCLAW_API_KEY
-        ]);
-        $ch = curl_init($webhook_url);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-        curl_exec($ch);
-        curl_close($ch);
-    }
+// --- Fire webhook only if not paused ---
+if (!$is_paused && function_exists('curl_init')) {
+    $webhook_url = 'http://127.0.0.1:18789/hooks/agent';
+    $payload = json_encode([
+        'message' => "New update request submitted (ID: {$new_request_id}). Check the update_requests table and process any pending requests according to your SKILL.md.",
+        'name'    => 'UpdateRequestTrigger',
+    ]);
+    $ch = curl_init($webhook_url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer 08a01ca8a98be994d900380a76ede73e5b2ad7f4441d3cfd59bf76e8557f5bfb',
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_exec($ch);
+    curl_close($ch);
+}
 
     // Store sanitized copy for success page display
     $_SESSION['data_request'] = [
