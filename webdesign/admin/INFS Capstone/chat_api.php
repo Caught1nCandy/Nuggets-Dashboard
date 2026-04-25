@@ -171,7 +171,7 @@ if (!$response || $httpCode !== 200) {
 }
 
 $data   = json_decode($response, true);
-$answer = $data['message']['content'] ?? $data['content'] ?? 'No response received.';
+$answer = $data['choices'][0]['message']['content'] ?? $data['message']['content'] ?? $data['content'] ?? 'No response received.';
 
 // ── Save to session chat history ──────────────────────────────
 $_SESSION['chat_history'][] = [
