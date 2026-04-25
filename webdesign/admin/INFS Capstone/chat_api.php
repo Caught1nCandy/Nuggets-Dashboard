@@ -166,7 +166,7 @@ curl_close($ch);
 
 if (!$response || $httpCode !== 200) {
     http_response_code(502);
-    echo json_encode(['error' => 'Could not reach AI. Please try again.']);
+    echo json_encode(['error' => 'Could not reach AI. Please try again.', 'debug_code' => $httpCode, 'debug_response' => $response]);
     exit();
 }
 
