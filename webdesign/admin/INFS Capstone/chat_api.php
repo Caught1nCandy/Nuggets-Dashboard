@@ -194,6 +194,10 @@ curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer) {
         if ($content !== null) {
             $answer .= $content;
         }
+        // Debug — log all non-content chunks
+if ($content === null) {
+    error_log("STREAM CHUNK: " . $json);
+}
     }
     return strlen($chunk);
 });
