@@ -211,7 +211,9 @@ if ($httpCode !== 200 || empty($answer)) {
     echo json_encode(['error' => 'Could not reach AI. Please try again.']);
     exit();
 }
-
+if (empty($answer)) {
+    $answer = "I found the information but had trouble formatting a response. Please try asking again.";
+}
 // ── Save to session chat history ──────────────────────────────
 $_SESSION['chat_history'][] = [
     'question'  => $question,
