@@ -163,9 +163,12 @@ $allMessages = array_merge(
 $payload = json_encode([
     'model'    => 'openclaw/default',
     'messages' => $allMessages,
-    'stream'   => false,
+    'stream'   => true,
     'user'     => $_SESSION['employee_id'],
 ]);
+
+// ── Stream the response, collect only final text content ──────
+$answer = '';
 
 $ch = curl_init($openclaw_url);
 curl_setopt($ch, CURLOPT_POST, 1);
@@ -174,20 +177,36 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json',
     'Authorization: Bearer ' . OPENCLAW_GATEWAY_TOKEN,
 ]);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 120); // AI can take a moment
-$response = curl_exec($ch);
+curl_setopt($ch, CURLOPT_TIMEOUT, 300); // 5 min — agent may need multiple tool calls
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer) {
+    // Each chunk may contain multiple SSE lines
+    $lines = explode("\n", $chunk);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (!str_starts_with($line, 'data:')) continue;
+        $json = trim(substr($line, 5));
+        if ($json === '[DONE]') continue;
+        $data = json_decode($json, true);
+        if (!$data) continue;
+        // Only collect actual text content — ignore tool calls and thinking
+        $content = $data['choices'][0]['delta']['content'] ?? null;
+        if ($content !== null) {
+            $answer .= $content;
+        }
+    }
+    return strlen($chunk);
+});
+
+curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-if (!$response || $httpCode !== 200) {
+if ($httpCode !== 200 || empty($answer)) {
     http_response_code(502);
-    echo json_encode(['error' => 'Could not reach AI. Please try again.', 'debug_code' => $httpCode, 'debug_response' => $response]);
+    echo json_encode(['error' => 'Could not reach AI. Please try again.']);
     exit();
 }
-
-$data   = json_decode($response, true);
-$answer = $data['choices'][0]['message']['content'] ?? $data['message']['content'] ?? $data['content'] ?? 'No response received.';
 
 // ── Save to session chat history ──────────────────────────────
 $_SESSION['chat_history'][] = [
