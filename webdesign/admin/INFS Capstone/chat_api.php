@@ -179,25 +179,24 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 ]);
 curl_setopt($ch, CURLOPT_TIMEOUT, 300); // 5 min — agent may need multiple tool calls
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer) {
-    // Each chunk may contain multiple SSE lines
-    $lines = explode("\n", $chunk);
-    foreach ($lines as $line) {
-        $line = trim($line);
+$buffer = '';
+curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer, &$buffer) {
+    $buffer .= $chunk;
+    while (($pos = strpos($buffer, "\n")) !== false) {
+        $line = trim(substr($buffer, 0, $pos));
+        $buffer = substr($buffer, $pos + 1);
         if (!str_starts_with($line, 'data:')) continue;
         $json = trim(substr($line, 5));
         if ($json === '[DONE]') continue;
         $data = json_decode($json, true);
         if (!$data) continue;
-        // Only collect actual text content — ignore tool calls and thinking
         $content = $data['choices'][0]['delta']['content'] ?? null;
         if ($content !== null) {
             $answer .= $content;
         }
-        // Debug — log all non-content chunks
-if ($content === null) {
-    error_log("STREAM CHUNK: " . $json);
-}
+        if ($content === null) {
+            error_log("STREAM CHUNK: " . $json);
+        }
     }
     return strlen($chunk);
 });
