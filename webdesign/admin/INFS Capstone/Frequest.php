@@ -33,6 +33,7 @@ if ($_SESSION['role'] === 'employee') {
       padding: 0;
       font-family: 'Open Sans', sans-serif;
       background-image: url('fimg/tarmac.jpg');
+      opacity: .50;
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
