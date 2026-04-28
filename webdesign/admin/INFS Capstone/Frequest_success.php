@@ -27,15 +27,24 @@ $data = $_SESSION['data_request'];
       margin: 0;
       padding: 0;
       font-family: 'Open Sans', sans-serif;
-      background-image: url('fimg/closeup.jpg');
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      background-attachment: fixed;
       display: flex;
       flex-direction: column;
       align-items: stretch;
     }
+
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url('fimg/closeup.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        opacity: 0.5;
+        z-index: -1;
+    }
+      
       .form-container {
   align-self: center;
 }
