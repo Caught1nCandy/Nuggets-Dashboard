@@ -41,7 +41,7 @@ if ($_SESSION['role'] === 'employee') {
     body::before {
         content: "";
         position: fixed;
-        insert: 0;
+        inset: 0;
         background-image: url('fimg/tarmac.jpg');
         background-position: center;
         background-repeat: no-repeat;
