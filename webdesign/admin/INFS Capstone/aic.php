@@ -366,8 +366,13 @@ $grandTotal    = $totalCalc + $totalDisc;
     <div class="table-card">
       <div class="table-toolbar">
         <span class="table-title">AIC Allocations — FY25</span>
-        <?php if (!$is_finalized): ?>
-        <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+        <?php if (!$is_finished): ?>
+        <div style="display:flex; gap:10px;">
+            <button type="button" class="btn-sm" id="btn-reset"
+                style="background:white; color:var(--purple); border:2px solid var(--purple);"
+                onclick="resetDiscretionary()">↺ Undo Changes</button>
+            <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+        </div>
         <?php endif; ?>
       </div>
       <div class="table-wrap">
