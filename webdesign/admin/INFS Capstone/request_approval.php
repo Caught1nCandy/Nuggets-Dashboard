@@ -219,13 +219,22 @@ foreach ($history as $h) {
     html, body {
       min-height: 100vh;
       font-family: 'Open Sans', sans-serif;
-      background-image: url('fimg/tarmac.jpg');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
       display: flex;
       flex-direction: column;
     }
+
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url('fimg/tarmac.jpg');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        opacity: 0.5;
+        z-index: -1;
+    }
+      
     .page-content { max-width: 1200px; margin: 40px auto; padding: 0 20px; width: 100%; }
     .section-title { color: white; font-size: 20px; font-weight: 700; margin: 30px 0 12px; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; }
