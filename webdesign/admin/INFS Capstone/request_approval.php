@@ -236,7 +236,7 @@ foreach ($history as $h) {
     }
       
     .page-content { max-width: 1200px; margin: 40px auto; padding: 0 20px; width: 100%; }
-    .section-title { color: white; font-size: 20px; font-weight: 700; margin: 30px 0 12px; text-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+    .section-title { color: white; font-size: 20px; font-weight: 700; margin: 30px 0 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; }
     .alert-success { background: #d4edda; color: #155724; }
     .alert-error   { background: #f8d7da; color: #721c24; }
