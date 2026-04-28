@@ -271,11 +271,16 @@ $grandTotal    = $totalCalc + $totalDisc;
 <?php $activePage = 'aic'; include __DIR__ . '/navbar.php'; ?>
 
 <div class="page-wrapper">
-
-  <?php if ($is_finalized): ?>
-  <div class="finalized-banner">
-    ✓ AIC awards have been finalized and sent to payroll. No further changes are permitted.
-  </div>
+<?php if ($is_finalized): ?>
+<div class="finalized-banner" style="justify-content: space-between;">
+  <span>✓ AIC awards have been finalized and sent to payroll. No further changes are permitted.</span>
+  <?php if ($myRole === 'sysadmin'): ?>
+  <form method="POST" onsubmit="return confirm('Undo finalization? This will re-open AIC for editing.');">
+    <input type="hidden" name="action" value="undo_finalize">
+    <button type="submit" class="btn-sm" style="background:#c0392b;color:white;">↩ Undo Finalize (Sysadmin)</button>
+  </form>
+  <?php endif; ?>
+</div>
   <?php endif; ?>
 
   <?php if ($message): ?>
