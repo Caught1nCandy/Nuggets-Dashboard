@@ -16,7 +16,7 @@ $myId       = $_SESSION['employee_id'];
 $TOTAL_POOL = 2500000.00;
 
 // ── Load settings ─────────────────────────────────────────────
-$discRow = $pdo->query("SELECT setting_value FROM settings WHERE setting_key = 'discretionary_pool'")->fetch();
+$discRow   = $pdo->query("SELECT setting_value FROM settings WHERE setting_key = 'discretionary_pool'")->fetch();
 $DISC_POOL = $discRow ? floatval($discRow['setting_value']) : 50000.00;
 $MAIN_POOL = $TOTAL_POOL - $DISC_POOL;
 
@@ -27,87 +27,94 @@ $message = null;
 $msgType = 'success';
 
 // ── Handle POST actions ───────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_finalized) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // ── Update discretionary pool size (sysadmin only) ────────
-    if ($action === 'save_disc_pool' && $myRole === 'sysadmin') {
-        $newDisc = floatval($_POST['disc_pool_amount'] ?? 50000);
-
-        if ($newDisc < 0) {
-            $message = "Discretionary pool cannot be negative.";
-            $msgType = 'error';
-        } elseif ($newDisc >= $TOTAL_POOL) {
-            $message = "Discretionary pool cannot equal or exceed the total $2,500,000 pool.";
-            $msgType = 'error';
-        } else {
-            $newMain = $TOTAL_POOL - $newDisc;
-
-            // Save new disc pool setting
-            $pdo->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = 'discretionary_pool'")
-                ->execute([number_format($newDisc, 2, '.', '')]);
-
-            // Recalculate all eligible employees' main calculated_amount
-            $pdo->exec("
-                UPDATE aic_ratings a
-                JOIN (
-                    SELECT SUM(performance_rating) AS total_rating
-                    FROM aic_ratings
-                    WHERE is_eligible = 1
-                ) t
-                SET a.calculated_amount = ROUND(($newMain * a.performance_rating / t.total_rating), 2)
-                WHERE a.is_eligible = 1
-            ");
-
-            $DISC_POOL = $newDisc;
-            $MAIN_POOL = $newMain;
-            $message   = "Pools updated — Main: $" . number_format($newMain, 2) . " | Discretionary: $" . number_format($newDisc, 2) . ". Ratings recalculated.";
-        }
+    // ── Undo finalize (sysadmin only) — outside the !$is_finalized check ──
+    if ($action === 'undo_finalize' && $myRole === 'sysadmin') {
+        $pdo->exec("UPDATE settings SET setting_value = '0' WHERE setting_key = 'aic_finalized'");
+        $pdo->exec("UPDATE aic_ratings SET finalized = 0 WHERE is_eligible = 1");
+        $message      = "Finalization undone. AIC is now open for editing again.";
+        $msgType      = 'warning';
+        $is_finalized = false;
     }
 
-    // ── Save discretionary awards ─────────────────────────────
-    if ($action === 'save') {
-        $awards = $_POST['discretionary'] ?? [];
-        $errors = 0;
-        $stmt   = $pdo->prepare("
-            UPDATE aic_ratings
-            SET discretionary_amount = :amt,
-                finalized_by         = :by,
-                finalized_at         = NOW()
-            WHERE employee_id = :id AND is_eligible = 1
-        ");
-        foreach ($awards as $empId => $amount) {
-            $amount = trim($amount);
-            if (!is_numeric($amount) || floatval($amount) < 0) {
-                $errors++;
-                continue;
+    if (!$is_finalized) {
+
+        // ── Update discretionary pool size (sysadmin only) ────
+        if ($action === 'save_disc_pool' && $myRole === 'sysadmin') {
+            $newDisc = floatval($_POST['disc_pool_amount'] ?? 50000);
+            if ($newDisc < 0) {
+                $message = "Discretionary pool cannot be negative.";
+                $msgType = 'error';
+            } elseif ($newDisc >= $TOTAL_POOL) {
+                $message = "Discretionary pool cannot equal or exceed the total \$2,500,000 pool.";
+                $msgType = 'error';
+            } else {
+                $newMain = $TOTAL_POOL - $newDisc;
+                $pdo->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = 'discretionary_pool'")
+                    ->execute([number_format($newDisc, 2, '.', '')]);
+                $pdo->exec("
+                    UPDATE aic_ratings a
+                    JOIN (
+                        SELECT SUM(performance_rating) AS total_rating
+                        FROM aic_ratings
+                        WHERE is_eligible = 1
+                    ) t
+                    SET a.calculated_amount = ROUND(($newMain * a.performance_rating / t.total_rating), 2)
+                    WHERE a.is_eligible = 1
+                ");
+                $DISC_POOL = $newDisc;
+                $MAIN_POOL = $newMain;
+                $message   = "Pools updated — Main: $" . number_format($newMain, 2) . " | Discretionary: $" . number_format($newDisc, 2) . ". Ratings recalculated.";
             }
-            $stmt->execute([
-                ':amt' => round(floatval($amount), 2),
-                ':by'  => $myId,
-                ':id'  => $empId,
-            ]);
         }
-        $message = $errors === 0
-            ? "Discretionary awards saved."
-            : "$errors invalid entries skipped. All valid amounts saved.";
-        $msgType = $errors > 0 ? 'warning' : 'success';
-        header("Location: aic.php?saved=1");
-        exit();
-    }
 
-    // ── Finalize and lock ─────────────────────────────────────
-    if ($action === 'finalize') {
-        $check = $pdo->query("SELECT COUNT(*) FROM settings WHERE setting_key = 'aic_finalized'")->fetchColumn();
-        if ($check == 0) {
-            $pdo->exec("INSERT INTO settings (setting_key, setting_value) VALUES ('aic_finalized', '1')");
-        } else {
-            $pdo->exec("UPDATE settings SET setting_value = '1' WHERE setting_key = 'aic_finalized'");
+        // ── Save discretionary awards ─────────────────────────
+        if ($action === 'save') {
+            $awards = $_POST['discretionary'] ?? [];
+            $errors = 0;
+            $stmt   = $pdo->prepare("
+                UPDATE aic_ratings
+                SET discretionary_amount = :amt,
+                    finalized_by         = :by,
+                    finalized_at         = NOW()
+                WHERE employee_id = :id AND is_eligible = 1
+            ");
+            foreach ($awards as $empId => $amount) {
+                $amount = trim($amount);
+                if (!is_numeric($amount) || floatval($amount) < 0) {
+                    $errors++;
+                    continue;
+                }
+                $stmt->execute([
+                    ':amt' => round(floatval($amount), 2),
+                    ':by'  => $myId,
+                    ':id'  => $empId,
+                ]);
+            }
+            $message = $errors === 0
+                ? "Discretionary awards saved."
+                : "$errors invalid entries skipped. All valid amounts saved.";
+            $msgType = $errors > 0 ? 'warning' : 'success';
+            header("Location: aic.php?saved=1");
+            exit();
         }
-        $pdo->exec("UPDATE aic_ratings SET finalized = 1 WHERE is_eligible = 1");
-        $message      = "AIC awards finalized and sent to payroll. No further changes are permitted.";
-        $is_finalized = true;
-    }
+
+        // ── Finalize and lock ─────────────────────────────────
+        if ($action === 'finalize') {
+            $check = $pdo->query("SELECT COUNT(*) FROM settings WHERE setting_key = 'aic_finalized'")->fetchColumn();
+            if ($check == 0) {
+                $pdo->exec("INSERT INTO settings (setting_key, setting_value) VALUES ('aic_finalized', '1')");
+            } else {
+                $pdo->exec("UPDATE settings SET setting_value = '1' WHERE setting_key = 'aic_finalized'");
+            }
+            $pdo->exec("UPDATE aic_ratings SET finalized = 1 WHERE is_eligible = 1");
+            $message      = "AIC awards finalized and sent to payroll. No further changes are permitted.";
+            $is_finalized = true;
+        }
+
+    } // end !$is_finalized
 }
 
 if (isset($_GET['saved'])) {
@@ -182,14 +189,11 @@ $grandTotal    = $totalCalc + $totalDisc;
     .finalized-banner {
       background: #e6faf0; border: 2px solid var(--green); border-radius: 10px;
       padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center;
-      gap: 12px; font-weight: 700; color: var(--green); font-size: 15px;
+      justify-content: space-between; gap: 12px; font-weight: 700; color: var(--green); font-size: 15px;
+      flex-wrap: wrap;
     }
 
-    /* Pool config — sysadmin only */
-    .pool-config {
-      background: white; border: 1px solid var(--border); border-radius: 10px;
-      padding: 16px 20px; margin-bottom: 20px; border-left: 4px solid var(--purple);
-    }
+    .pool-config { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; border-left: 4px solid var(--purple); }
     .pool-config-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; }
     .pool-config-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     .pool-config-row label { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -202,8 +206,8 @@ $grandTotal    = $totalCalc + $totalDisc;
     .btn-sm:hover { opacity: 0.85; }
     .btn-purple { background: var(--purple); color: white; }
     .btn-green  { background: var(--green);  color: white; }
+    .btn-red    { background: var(--red);    color: white; }
 
-    /* KPI bar */
     .kpi-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 20px; }
     .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; border-bottom: 3px solid var(--purple); }
     .kpi-card.disc  { border-bottom-color: var(--orange); }
@@ -217,14 +221,12 @@ $grandTotal    = $totalCalc + $totalDisc;
     .kpi-card.ok    .kpi-value { color: var(--green); }
     .kpi-card.total .kpi-value { color: var(--blue); }
 
-    /* Disc progress bar */
     .disc-progress { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin-bottom: 20px; }
     .disc-progress-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.07em; }
     .disc-progress-track { height: 8px; background: #eeeeee; border-radius: 99px; overflow: hidden; }
     .disc-progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--purple), var(--orange)); transition: width 0.3s; }
     .disc-progress-fill.over { background: var(--red); }
 
-    /* Table */
     .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
     .table-card::before { content: ''; display: block; height: 3px; background: linear-gradient(90deg, var(--purple), var(--orange)); }
     .table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
@@ -258,7 +260,6 @@ $grandTotal    = $totalCalc + $totalDisc;
     .zero-badge { color: var(--muted); font-style: italic; font-size: 12px; }
     .finalized-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 4px; }
 
-    /* Finalize section */
     .finalize-section { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; border-left: 4px solid var(--green); }
     .finalize-text h3 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
     .finalize-text p { font-size: 13px; color: var(--muted); }
@@ -271,16 +272,17 @@ $grandTotal    = $totalCalc + $totalDisc;
 <?php $activePage = 'aic'; include __DIR__ . '/navbar.php'; ?>
 
 <div class="page-wrapper">
-<?php if ($is_finalized): ?>
-<div class="finalized-banner" style="justify-content: space-between;">
-  <span>✓ AIC awards have been finalized and sent to payroll. No further changes are permitted.</span>
-  <?php if ($myRole === 'sysadmin'): ?>
-  <form method="POST" onsubmit="return confirm('Undo finalization? This will re-open AIC for editing.');">
-    <input type="hidden" name="action" value="undo_finalize">
-    <button type="submit" class="btn-sm" style="background:#c0392b;color:white;">↩ Undo Finalize (Sysadmin)</button>
-  </form>
-  <?php endif; ?>
-</div>
+
+  <?php if ($is_finalized): ?>
+  <div class="finalized-banner">
+    <span>✓ AIC awards have been finalized and sent to payroll. No further changes are permitted.</span>
+    <?php if ($myRole === 'sysadmin'): ?>
+    <form method="POST" onsubmit="return confirm('Undo finalization? This will re-open AIC for editing.');">
+      <input type="hidden" name="action" value="undo_finalize">
+      <button type="submit" class="btn-sm btn-red">↩ Undo Finalize (Sysadmin)</button>
+    </form>
+    <?php endif; ?>
+  </div>
   <?php endif; ?>
 
   <?php if ($message): ?>
@@ -371,12 +373,12 @@ $grandTotal    = $totalCalc + $totalDisc;
     <div class="table-card">
       <div class="table-toolbar">
         <span class="table-title">AIC Allocations — FY25</span>
-        <?php if (!$is_finished): ?>
+        <?php if (!$is_finalized): ?>
         <div style="display:flex; gap:10px;">
-            <button type="button" class="btn-sm" id="btn-reset"
-                style="background:white; color:var(--purple); border:2px solid var(--purple);"
-                onclick="resetDiscretionary()">↺ Undo Changes</button>
-            <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+          <button type="button" class="btn-sm"
+              style="background:white; color:var(--purple); border:2px solid var(--purple);"
+              onclick="resetDiscretionary()">↺ Undo Changes</button>
+          <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
         </div>
         <?php endif; ?>
       </div>
@@ -470,7 +472,7 @@ $grandTotal    = $totalCalc + $totalDisc;
   <div class="finalize-section">
     <div class="finalize-text">
       <h3>Ready to finalize?</h3>
-      <p>Once finalized, all award amounts are locked and sent to payroll. This action cannot be undone.</p>
+      <p>Once finalized, all award amounts are locked and sent to payroll. This action cannot be undone without sysadmin access.</p>
     </div>
     <form method="POST" onsubmit="return confirmFinalize()">
       <input type="hidden" name="action" value="finalize">
@@ -485,7 +487,6 @@ $grandTotal    = $totalCalc + $totalDisc;
 const DISC_POOL  = <?php echo $DISC_POOL; ?>;
 const TOTAL_POOL = <?php echo $TOTAL_POOL; ?>;
 
-// Preview pool split before submitting
 function previewPools(val) {
     const disc = parseFloat(val) || 0;
     const main = TOTAL_POOL - disc;
@@ -501,20 +502,17 @@ function onDiscChange(input) {
     const empId   = input.dataset.empid;
     const discVal = parseFloat(input.value) || 0;
     input.classList.toggle('has-award', discVal > 0);
-
     const row  = input.closest('tr');
     const calc = parseFloat(row.dataset.calc) || 0;
     const tot  = calc + discVal;
     const totalEl = document.getElementById('total-' + empId);
     if (totalEl) totalEl.textContent = '$' + tot.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-
     updateDiscTotals();
 }
 
 function updateDiscTotals() {
     let totalDisc  = 0;
     let totalGrand = 0;
-
     document.querySelectorAll('tr:not(.ineligible)').forEach(row => {
         const calc = parseFloat(row.dataset.calc) || 0;
         const inp  = row.querySelector('.disc-input');
@@ -522,7 +520,6 @@ function updateDiscTotals() {
         totalDisc  += disc;
         totalGrand += calc + disc;
     });
-
     const discRemaining = DISC_POOL - totalDisc;
     const discPct       = DISC_POOL > 0 ? Math.min(100, (totalDisc / DISC_POOL) * 100) : 0;
 
@@ -546,11 +543,22 @@ function updateDiscTotals() {
     else                                 remCard.classList.add('disc');
 }
 
+function resetDiscretionary() {
+    const inputs = document.querySelectorAll('.disc-input:not(:disabled)');
+    if (inputs.length === 0) return;
+    if (!confirm('Reset all discretionary awards to 0.00? This will not save until you click Save.')) return;
+    inputs.forEach(input => {
+        input.value = '0.00';
+        input.classList.remove('has-award');
+        onDiscChange(input);
+    });
+}
+
 function confirmFinalize() {
     let totalDisc = 0;
     document.querySelectorAll('.disc-input').forEach(inp => { totalDisc += parseFloat(inp.value) || 0; });
     const remaining = DISC_POOL - totalDisc;
-    let msg = 'Finalize AIC awards and send to payroll?\n\nThis CANNOT be undone.';
+    let msg = 'Finalize AIC awards and send to payroll?\n\nThis CANNOT be undone without sysadmin access.';
     if (remaining > 0.01) {
         msg += '\n\nNote: $' + remaining.toLocaleString('en-US', {minimumFractionDigits:2}) +
                ' of the discretionary pool has not been awarded.';
@@ -563,18 +571,6 @@ function confirmFinalize() {
     return confirm(msg);
 }
 
-function resetDiscretionary() {
-    const inputs = document.querySelectorAll ('.disc-input:not(:disabled)');
-    if (inputs.length === 0) return;
-    if (!confirm('Reset all discretionary awards to 0.00? This will not save until you click Save.')) return;
-    inputs.forEach(input => {
-        input.value = '0.00';
-        input.classList.remove('has-award');
-        onDiscCharge(input) ;
-    }) ;
-}
-    
-// Sortable columns
 let sortCol = -1, sortAsc = true;
 function sortTable(col) {
     const tbody = document.querySelector('#aic-table tbody');
@@ -601,6 +597,6 @@ function sortTable(col) {
     });
 }
 </script>
-    <?php include __DIR__ . '/chat_widget.php'; ?>
+<?php include __DIR__ . '/chat_widget.php'; ?>
 </body>
 </html>
