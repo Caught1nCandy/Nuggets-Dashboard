@@ -558,6 +558,17 @@ function confirmFinalize() {
     return confirm(msg);
 }
 
+function resetDiscretionary() {
+    const inputs = document.querySelectorAll ('.disc-input:not(:disabled)');
+    if (inputs.length === 0) return;
+    if (!confirm('Reset all discretionary awards to 0.00? This will not save until you click Save.')) return;
+    inputs.forEach(input => {
+        input.value = '0.00';
+        input.classList.remove('has-award');
+        onDiscCharge(input) ;
+    }) ;
+}
+    
 // Sortable columns
 let sortCol = -1, sortAsc = true;
 function sortTable(col) {
