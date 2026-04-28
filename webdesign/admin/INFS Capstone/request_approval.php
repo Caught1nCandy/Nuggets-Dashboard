@@ -339,7 +339,7 @@ foreach ($history as $h) {
   </div>
 
   <!-- AWAITING APPROVAL -->
-  <div class="section-title">⏳ Awaiting Your Approval (<?= count($proposed) ?>)</div>
+  <div class="section-title">Awaiting Your Approval (<?= count($proposed) ?>)</div>
   <?php if (empty($proposed)): ?>
     <div class="empty-state">No proposed changes waiting for approval.</div>
   <?php else: ?>
@@ -386,7 +386,7 @@ foreach ($history as $h) {
   <?php endif; ?>
 
   <!-- FLAGGED -->
-  <div class="section-title">🚩 Flagged — Too Ambiguous (<?= count($flagged) ?>)</div>
+  <div class="section-title">Flagged — Too Ambiguous (<?= count($flagged) ?>)</div>
   <?php if (empty($flagged)): ?>
     <div class="empty-state">No flagged requests.</div>
   <?php else: ?>
@@ -407,7 +407,7 @@ foreach ($history as $h) {
   <?php endif; ?>
 
   <!-- PENDING -->
-  <div class="section-title">🕐 Pending Processing (<?= count($pending) ?>)</div>
+  <div class="section-title">Pending Processing (<?= count($pending) ?>)</div>
   <?php if (empty($pending)): ?>
     <div class="empty-state">No pending requests.</div>
   <?php else: ?>
@@ -428,7 +428,7 @@ foreach ($history as $h) {
   <?php endif; ?>
 
   <!-- CHANGE HISTORY -->
-  <div class="section-title">📋 Change History (<?= count($history) ?>)</div>
+  <div class="section-title">Change History (<?= count($history) ?>)</div>
   <?php if (empty($history)): ?>
     <div class="empty-state">No changes have been applied yet.</div>
   <?php else: ?>
