@@ -272,7 +272,7 @@ foreach ($history as $h) {
     .btn-pause   { background: #dc3545; color: white; padding: 10px 24px; font-size: 15px; }
     .btn-play    { background: #28a745; color: white; padding: 10px 24px; font-size: 15px; }
     .submitted-at { font-size: 12px; color: #999; margin-top: 12px; }
-    .empty-state { text-align: center; color: rgba(255,255,255,0.7); padding: 20px; font-size: 14px; text-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .empty-state { text-align: center; color: rgba(0,0,0,0.7); padding: 20px; font-size: 14px; }
     .history-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; text-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .history-table th { background: var(--purple); color: white; padding: 10px 14px; text-align: left; font-size: 13px; }
     .history-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; vertical-align: middle; }
