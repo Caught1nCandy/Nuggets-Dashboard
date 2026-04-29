@@ -74,16 +74,32 @@ if ($query !== '') {
     $params[':q4'] = '%' . $query . '%';
 }
 
-if ($location !== '') {
-    $where[]             = 'l.work_city = :location';
-    $where[]             = "($viewLevelSQL) = 'full'";
-    $params[':location'] = $location;
+// Build a separate view level SQL for WHERE clauses with different param names
+if ($myRole === 'employee') {
+    $viewLevelWhereSQL = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' ELSE 'name_only' END";
+    $viewLevelWhereParams = [':vl_where_self' => $myId];
+} elseif ($myRole === 'manager') {
+    $viewLevelWhereSQL = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' WHEN w.manager_id = :vl_where_mgr THEN 'full' ELSE 'name_only' END";
+    $viewLevelWhereParams = [':vl_where_self' => $myId, ':vl_where_mgr' => $myId];
+} elseif ($myRole === 'director') {
+    $viewLevelWhereSQL = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' WHEN w.director_id = :vl_where_dir THEN 'full' ELSE 'name_only' END";
+    $viewLevelWhereParams = [':vl_where_self' => $myId, ':vl_where_dir' => $myId];
+} else {
+    $viewLevelWhereSQL = "'" . $p['view_fields'] . "'";
+    $viewLevelWhereParams = [];
 }
 
+if ($location !== '') {
+    $where[]             = 'l.work_city = :location';
+    $where[]             = "($viewLevelWhereSQL) = 'full'";
+    $params[':location'] = $location;
+    $params              = array_merge($params, $viewLevelWhereParams);
+}
 if ($org !== '') {
     $where[]        = 'o.org_id = :org';
-    $where[]        = "($viewLevelSQL) = 'full'";
+    $where[]        = "($viewLevelWhereSQL) = 'full'";
     $params[':org'] = (int)$org;
+    $params         = array_merge($params, $viewLevelWhereParams);
 }
 
 if ($tenure !== '') {
