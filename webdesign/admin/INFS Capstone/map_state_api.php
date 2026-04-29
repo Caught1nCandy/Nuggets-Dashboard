@@ -42,20 +42,28 @@ $params[':state'] = $state;
 
 // view_level per role
 $p = $PERMISSIONS[$myRole] ?? $PERMISSIONS['employee'];
-
 if ($myRole === 'employee') {
     $viewLevelSQL = "CASE WHEN w.employee_id = :vl_self THEN 'full' ELSE 'name_only' END";
     $params[':vl_self'] = $myId;
+    $where[] = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' ELSE 'name_only' END = 'full'";
+    $params[':vl_where_self'] = $myId;
 } elseif ($myRole === 'manager') {
     $viewLevelSQL = "CASE WHEN w.employee_id = :vl_self THEN 'full' WHEN w.manager_id = :vl_mgr THEN 'full' ELSE 'name_only' END";
     $params[':vl_self'] = $myId;
     $params[':vl_mgr']  = $myId;
+    $where[] = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' WHEN w.manager_id = :vl_where_mgr THEN 'full' ELSE 'name_only' END = 'full'";
+    $params[':vl_where_self'] = $myId;
+    $params[':vl_where_mgr']  = $myId;
 } elseif ($myRole === 'director') {
     $viewLevelSQL = "CASE WHEN w.employee_id = :vl_self THEN 'full' WHEN w.director_id = :vl_dir THEN 'full' ELSE 'name_only' END";
     $params[':vl_self'] = $myId;
     $params[':vl_dir']  = $myId;
+    $where[] = "CASE WHEN w.employee_id = :vl_where_self THEN 'full' WHEN w.director_id = :vl_where_dir THEN 'full' ELSE 'name_only' END = 'full'";
+    $params[':vl_where_self'] = $myId;
+    $params[':vl_where_dir']  = $myId;
 } else {
     $viewLevelSQL = "'" . $p['view_fields'] . "'";
+    // VP/SVP/sysadmin have full access to everyone — no view level filter needed
 }
 
 $whereSQL = implode(' AND ', $where);
