@@ -691,9 +691,8 @@ function formatAnniversary(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return '—';
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
-
 // ── Search ─────────────────────────────────────────────────
 
 function fetchResults() {
