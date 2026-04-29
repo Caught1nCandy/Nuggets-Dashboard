@@ -76,11 +76,13 @@ if ($query !== '') {
 
 if ($location !== '') {
     $where[]             = 'l.work_city = :location';
+    $where[]             = "($viewLevelSQL) = 'full'";
     $params[':location'] = $location;
 }
 
 if ($org !== '') {
     $where[]        = 'o.org_id = :org';
+    $where[]        = "($viewLevelSQL) = 'full'";
     $params[':org'] = (int)$org;
 }
 
