@@ -374,23 +374,29 @@ $grandTotal    = $totalCalc + $totalDisc;
       <div class="table-toolbar">
         <span class="table-title">AIC Allocations — FY25</span>
         <?php if (!$is_finalized): ?>
-        <div style="display:flex; align-items:flex-start; gap:16px;">
-            <div style="display:flex; gap:10px;">
-                <button type="button" class="btn-sm"
-                    style="background:white; color:var(--purple); border: 2px solid var(--purple);"
-                    onclick="resetDiscretionary()">↺ Undo Changes</button>
-                <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+        <div style="display:flex; align-items:center; gap:12px; margin-left: auto;">
+
+<!-- Undo + Save with note underneath -->            
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn-sm"
+                        style="background:white; color:var(--purple); border:2px, solid var(--purple);"
+                        onclick="resetDiscretionary()">↺ Undo Changes</button>
+                    <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+                </div>
+                <span style="font-size:11px; color:var(--muted);">
+                    After clicking <strong>Undo Changes</strong>, you must also click <strong>Save Discretionary Awards</strong> to apply.
+                </span>
             </div>
-            <span style="font-size:11px; color:var(--muted);">
-                After clicking <strong>Undo Changes</strong>, you must also click <strong>Save Discretionary Awards</strong> to apply.
-            </span>
+
+<!-- Divider -->
+            <div style="border-left:1px solid var(--border); height:36px;"></div>
+<!-- Finalize -->
+            <form method="POST" onsubmit="return confirmFinalize()" style="margin:0;">
+                <input type="hidden" name="action" value="finalize">
+                <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
+            </form>
         </div>
-        <div style="border-left:1px solid-var(--border); height:36px; align-self:center;"></div>
-        <form method="POST" onsubmit="returnconfirmFinalize()" style=margin:0;">
-            <input type="hidden" name="action" value="finalize">
-            <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
-        </form>
-      </div>
         <?php endif; ?>
       </div>
       <div class="table-wrap">
