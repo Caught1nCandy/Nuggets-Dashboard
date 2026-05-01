@@ -374,12 +374,23 @@ $grandTotal    = $totalCalc + $totalDisc;
       <div class="table-toolbar">
         <span class="table-title">AIC Allocations — FY25</span>
         <?php if (!$is_finalized): ?>
-        <div style="display:flex; gap:10px;">
-          <button type="button" class="btn-sm"
-              style="background:white; color:var(--purple); border:2px solid var(--purple);"
-              onclick="resetDiscretionary()">↺ Undo Changes</button>
-          <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+        <div style="display:flex; align-items:flex-start; gap:16px;">
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn-sm"
+                    style="background:white; color:var(--purple); border: 2px solid var(--purple);"
+                    onclick="resetDiscretionary()">↺ Undo Changes</button>
+                <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
+            </div>
+            <span style="font-size:11px; color:var(--muted);">
+                After clicking <strong>Undo Changes</strong>, you must also click <strong>Save Discretionary Awards</strong> to apply.
+            </span>
         </div>
+        <div style="border-left:1px solid-var(--border); height:36px; align-self:center;"></div>
+        <form method="POST" onsubmit="returnconfirmFinalize()" style=margin:0;">
+            <input type="hidden" name="action" value="finalize">
+            <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
+        </form>
+      </div>
         <?php endif; ?>
       </div>
       <div class="table-wrap">
@@ -466,20 +477,6 @@ $grandTotal    = $totalCalc + $totalDisc;
       </div>
     </div>
   </form>
-
-  <!-- Finalize section -->
-  <?php if (!$is_finalized): ?>
-  <div class="finalize-section">
-    <div class="finalize-text">
-      <h3>Ready to finalize?</h3>
-      <p>Once finalized, all award amounts are locked and sent to payroll. This action cannot be undone without sysadmin access.</p>
-    </div>
-    <form method="POST" onsubmit="return confirmFinalize()">
-      <input type="hidden" name="action" value="finalize">
-      <button type="submit" class="btn-finalize">✓ Finalize &amp; Send to Payroll</button>
-    </form>
-  </div>
-  <?php endif; ?>
 
 </div>
 
