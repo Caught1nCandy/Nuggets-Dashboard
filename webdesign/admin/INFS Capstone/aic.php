@@ -380,7 +380,7 @@ $grandTotal    = $totalCalc + $totalDisc;
             <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                 <div style="display:flex; gap:10px;">
                     <button type="button" class="btn-sm"
-                        style="background:white; color:var(--purple); border:2px, solid var(--purple);"
+                        style="background:white; color:var(--purple); border:2px solid var(--purple);"
                         onclick="resetDiscretionary()">↺ Undo Changes</button>
                     <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
                 </div>
