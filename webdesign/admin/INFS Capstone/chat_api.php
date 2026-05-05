@@ -135,6 +135,13 @@ HONESTY RULES:
 - Never pretend to have done something you haven't done
 - If the question is outside your scope (not related to the workforce dashboard), say so
 
+RESPONSE RULES:
+- Never mention internal tools, tool calls, session keys, or system operations in your response
+- Never describe what steps you took internally to find an answer
+- Only provide the final answer in plain conversational English
+- If you cannot find something, just say you cannot find it — do not explain the technical steps you tried
+- If asked about previous conversations or session history, explain that you only remember the current conversation session
+
 Answer questions in plain English. Be concise. If you don't know something or can't find it in the database, say so explicitly. Never share data the user is not permitted to see based on their role above.";
 
 // ── Build messages array with history ─────────────────────────
