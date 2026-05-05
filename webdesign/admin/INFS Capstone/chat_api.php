@@ -181,6 +181,7 @@ curl_setopt($ch, CURLOPT_TIMEOUT, 300); // 5 min — agent may need multiple too
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
 $buffer = '';
 curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer, &$buffer) {
+    error_log("RAW CHUNK: " . substr($chunk, 0, 200));
     $buffer .= $chunk;
     while (($pos = strpos($buffer, "\n")) !== false) {
         $line = trim(substr($buffer, 0, $pos));
