@@ -211,10 +211,11 @@ curl_close($ch);
 
 error_log("RAW ANSWER BEFORE CLEAN: " . substr($answer, 0, 500));
 // Strip Gemini internal tags and clean up the response
-$answer = preg_replace('/<final>.*?<\/final>/s', '', $answer);
-$answer = preg_replace('/<think>.*?<\/think>/s', '', $answer);
-$answer = preg_replace('/<[a-z]+>/i', '', $answer);
-$answer = preg_replace('/<\/[a-z]+>/i', '', $answer);
+// Clean up Gemini formatting artifacts
+$answer = preg_replace('/<final>(.*?)<\/final>/s', '$1', $answer); // extract final tag content
+$answer = preg_replace('/<think>.*?<\/think>/s', '', $answer);      // remove think blocks
+$answer = preg_replace('/^<[^>]*>?\*\*/', '**', $answer);           // fix leading broken tag before bold
+$answer = preg_replace('/^<[^>\n]*/', '', $answer);                  // strip any other leading broken tag
 $answer = trim($answer);
 error_log("RAW ANSWER AFTER CLEAN: " . substr($answer, 0, 500));
 
