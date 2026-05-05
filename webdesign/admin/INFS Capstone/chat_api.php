@@ -205,13 +205,14 @@ curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
+error_log("RAW ANSWER BEFORE CLEAN: " . substr($answer, 0, 500));
 // Strip Gemini internal tags and clean up the response
 $answer = preg_replace('/<final>.*?<\/final>/s', '', $answer);
 $answer = preg_replace('/<think>.*?<\/think>/s', '', $answer);
 $answer = preg_replace('/<[a-z]+>/i', '', $answer);
 $answer = preg_replace('/<\/[a-z]+>/i', '', $answer);
 $answer = trim($answer);
-error_log("RAW ANSWER: " . $answer);
+error_log("RAW ANSWER AFTER CLEAN: " . substr($answer, 0, 500));
 
 if ($httpCode !== 200 || empty($answer)) {
     http_response_code(502);
