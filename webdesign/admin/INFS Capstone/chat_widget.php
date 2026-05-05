@@ -334,12 +334,16 @@ function appendMessage(role, text, time) {
 
   const bubble = document.createElement('div');
   bubble.className = 'chat-msg-bubble';
-  bubble.innerHTML = text
+bubble.innerHTML = text
     .replace(/&/g, '&amp;')
+    .replace(/\*\*(.*?)\*\*/g, '||STRONG_OPEN||$1||STRONG_CLOSE||')
+    .replace(/\*(.*?)\*/g, '||EM_OPEN||$1||EM_CLOSE||')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\|\|STRONG_OPEN\|\|/g, '<strong>')
+    .replace(/\|\|STRONG_CLOSE\|\|/g, '</strong>')
+    .replace(/\|\|EM_OPEN\|\|/g, '<em>')
+    .replace(/\|\|EM_CLOSE\|\|/g, '</em>')
     .replace(/\n/g, '<br>');
 
   const timeEl = document.createElement('div');
