@@ -377,10 +377,6 @@ $grandTotal    = $totalCalc + $totalDisc;
             </span>
           </div>
           <div style="border-left:1px solid var(--border); height:36px;"></div>
-          <form method="POST" onsubmit="return confirmFinalize()" style="margin:0;">
-            <input type="hidden" name="action" value="finalize">
-            <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
-          </form>
         </div>
         <?php endif; ?>
       </div>
