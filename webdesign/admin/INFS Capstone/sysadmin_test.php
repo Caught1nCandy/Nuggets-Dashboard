@@ -13,29 +13,31 @@ require_once __DIR__ . '/db_config.php';
 
 // ── Handle form actions ───────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    if ($_POST['action'] === 'impersonate' && !empty($_POST['employee_id'])) {
-        $empId = $_POST['employee_id'];
-        $stmt = $pdo->prepare("
-            SELECT w.employee_id, w.first_name, w.last_name, w.role
-            FROM workforce w
-            WHERE w.employee_id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$empId]);
-        $emp = $stmt->fetch();
-        if ($emp) {
-            $_SESSION['employee_id'] = $emp['employee_id'];
-            $_SESSION['role']        = strtolower($emp['role']);
-            $_SESSION['first_name']  = $emp['first_name'];
-            $_SESSION['last_name']   = $emp['last_name'];
-        }
+if ($_POST['action'] === 'impersonate' && !empty($_POST['employee_id'])) {
+    $empId = $_POST['employee_id'];
+    $stmt = $pdo->prepare("
+        SELECT w.employee_id, w.first_name, w.last_name, w.role
+        FROM workforce w
+        WHERE w.employee_id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$empId]);
+    $emp = $stmt->fetch();
+    if ($emp) {
+        $_SESSION['employee_id'] = $emp['employee_id'];
+        $_SESSION['role']        = strtolower($emp['role']);
+        $_SESSION['first_name']  = $emp['first_name'];
+        $_SESSION['last_name']   = $emp['last_name'];
+        $_SESSION['chat_history'] = []; // clear chat history on impersonation switch
     }
-    if ($_POST['action'] === 'stop_impersonate') {
-        $_SESSION['employee_id'] = '0';
-        $_SESSION['role']        = 'sysadmin';
-        $_SESSION['first_name']  = 'Sys';
-        $_SESSION['last_name']   = 'Admin';
-    }
+}
+if ($_POST['action'] === 'stop_impersonate') {
+    $_SESSION['employee_id'] = '0';
+    $_SESSION['role']        = 'sysadmin';
+    $_SESSION['first_name']  = 'Sys';
+    $_SESSION['last_name']   = 'Admin';
+    $_SESSION['chat_history'] = []; // clear chat history when stopping impersonation
+}
     header("Location: sysadmin_test.php");
     exit();
 }
