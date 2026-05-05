@@ -30,7 +30,6 @@ $msgType = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // ── Undo finalize (sysadmin only) — outside the !$is_finalized check ──
     if ($action === 'undo_finalize' && $myRole === 'sysadmin') {
         $pdo->exec("UPDATE settings SET setting_value = '0' WHERE setting_key = 'aic_finalized'");
         $pdo->exec("UPDATE aic_ratings SET finalized = 0 WHERE is_eligible = 1");
@@ -41,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$is_finalized) {
 
-        // ── Update discretionary pool size (sysadmin only) ────
         if ($action === 'save_disc_pool' && $myRole === 'sysadmin') {
             $newDisc = floatval($_POST['disc_pool_amount'] ?? 50000);
             if ($newDisc < 0) {
@@ -70,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // ── Save discretionary awards ─────────────────────────
         if ($action === 'save') {
             $awards = $_POST['discretionary'] ?? [];
             $errors = 0;
@@ -101,7 +98,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        // ── Finalize and lock ─────────────────────────────────
         if ($action === 'finalize') {
             $check = $pdo->query("SELECT COUNT(*) FROM settings WHERE setting_key = 'aic_finalized'")->fetchColumn();
             if ($check == 0) {
@@ -114,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $is_finalized = true;
         }
 
-    } // end !$is_finalized
+    }
 }
 
 if (isset($_GET['saved'])) {
@@ -127,24 +123,21 @@ $rows = $pdo->query("
         a.employee_id,
         w.first_name,
         w.last_name,
-        w.role,
         j.title,
+        j.pay_band,
         o.organization_name,
         a.performance_rating,
         a.calculated_amount,
         COALESCE(a.discretionary_amount, 0) AS discretionary_amount,
         a.is_eligible,
         a.finalized,
-        mgr.first_name  AS manager_first,
-        mgr.last_name   AS manager_last,
-        dir.first_name  AS director_first,
-        dir.last_name   AS director_last
+        mgr.first_name AS manager_first,
+        mgr.last_name  AS manager_last
     FROM aic_ratings a
     LEFT JOIN workforce    w   ON w.employee_id   = a.employee_id
     LEFT JOIN job          j   ON j.job_code      = w.job_code
     LEFT JOIN organization o   ON o.org_id        = w.org_id
     LEFT JOIN workforce    mgr ON mgr.employee_id = w.manager_id
-    LEFT JOIN workforce    dir ON dir.employee_id = w.director_id
     ORDER BY a.is_eligible DESC, a.performance_rating DESC, w.last_name, w.first_name
 ")->fetchAll();
 
@@ -205,7 +198,6 @@ $grandTotal    = $totalCalc + $totalDisc;
     .btn-sm { padding: 7px 16px; border: none; border-radius: 6px; font-size: 13px; font-family: 'Open Sans', sans-serif; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
     .btn-sm:hover { opacity: 0.85; }
     .btn-purple { background: var(--purple); color: white; }
-    .btn-green  { background: var(--green);  color: white; }
     .btn-red    { background: var(--red);    color: white; }
 
     .kpi-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 20px; }
@@ -242,9 +234,7 @@ $grandTotal    = $totalCalc + $totalDisc;
     tr:hover td { background: #fafafa; }
     tr.ineligible td { opacity: 0.45; }
 
-    .role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-    .role-badge.Employee { background: #ede0f8; color: var(--purple); }
-    .role-badge.Manager  { background: #fff0e6; color: var(--orange); }
+    .pay-band-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #f0f0f0; color: var(--muted); }
 
     .rating-bar { display: flex; align-items: center; gap: 8px; }
     .rating-num { font-weight: 700; width: 16px; text-align: right; }
@@ -374,28 +364,23 @@ $grandTotal    = $totalCalc + $totalDisc;
       <div class="table-toolbar">
         <span class="table-title">AIC Allocations — FY25</span>
         <?php if (!$is_finalized): ?>
-        <div style="display:flex; align-items:center; gap:12px; margin-left: auto;">
-
-<!-- Undo + Save with note underneath -->            
-            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
-                <div style="display:flex; gap:10px;">
-                    <button type="button" class="btn-sm"
-                        style="background:white; color:var(--purple); border:2px solid var(--purple);"
-                        onclick="resetDiscretionary()">↺ Undo Changes</button>
-                    <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
-                </div>
-                <span style="font-size:11px; color:var(--muted);">
-                    After clicking <strong>Undo Changes</strong>, you must also click <strong>Save Discretionary Awards</strong> to apply.
-                </span>
+        <div style="display:flex; align-items:center; gap:12px; margin-left:auto;">
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+            <div style="display:flex; gap:10px;">
+              <button type="button" class="btn-sm"
+                  style="background:white; color:var(--purple); border:2px solid var(--purple);"
+                  onclick="resetDiscretionary()">↺ Undo Changes</button>
+              <button type="submit" class="btn-sm btn-purple">💾 Save Discretionary Awards</button>
             </div>
-
-<!-- Divider -->
-            <div style="border-left:1px solid var(--border); height:36px;"></div>
-<!-- Finalize -->
-            <form method="POST" onsubmit="return confirmFinalize()" style="margin:0;">
-                <input type="hidden" name="action" value="finalize">
-                <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
-            </form>
+            <span style="font-size:11px; color:var(--muted);">
+              After clicking <strong>Undo Changes</strong>, you must also click <strong>Save Discretionary Awards</strong> to apply.
+            </span>
+          </div>
+          <div style="border-left:1px solid var(--border); height:36px;"></div>
+          <form method="POST" onsubmit="return confirmFinalize()" style="margin:0;">
+            <input type="hidden" name="action" value="finalize">
+            <button type="submit" class="btn-finalize" style="padding:8px 18px; font-size:13px;">Finalize &amp; Send to Payroll</button>
+          </form>
         </div>
         <?php endif; ?>
       </div>
@@ -404,10 +389,10 @@ $grandTotal    = $totalCalc + $totalDisc;
           <thead>
             <tr>
               <th onclick="sortTable(0)">Employee <span class="sort-arrow">⇅</span></th>
-              <th onclick="sortTable(1)">Role <span class="sort-arrow">⇅</span></th>
-              <th onclick="sortTable(2)">Manager <span class="sort-arrow">⇅</span></th>
-              <th onclick="sortTable(3)">Director <span class="sort-arrow">⇅</span></th>
-              <th onclick="sortTable(4)">Dept <span class="sort-arrow">⇅</span></th>
+              <th onclick="sortTable(1)">Manager <span class="sort-arrow">⇅</span></th>
+              <th onclick="sortTable(2)">Job Title <span class="sort-arrow">⇅</span></th>
+              <th onclick="sortTable(3)">Department <span class="sort-arrow">⇅</span></th>
+              <th onclick="sortTable(4)">Pay Band <span class="sort-arrow">⇅</span></th>
               <th onclick="sortTable(5)">Rating <span class="sort-arrow">⇅</span></th>
               <th onclick="sortTable(6)">Main Award <span class="sort-arrow">⇅</span></th>
               <th>+ Discretionary</th>
@@ -417,11 +402,10 @@ $grandTotal    = $totalCalc + $totalDisc;
           </thead>
           <tbody>
             <?php foreach ($rows as $r):
-              $calc  = floatval($r['calculated_amount']);
-              $disc  = floatval($r['discretionary_amount']);
-              $total = $calc + $disc;
-              $managerName  = $r['manager_first']  ? $r['manager_first']  . ' ' . $r['manager_last']  : '—';
-              $directorName = $r['director_first'] ? $r['director_first'] . ' ' . $r['director_last'] : '—';
+              $calc        = floatval($r['calculated_amount']);
+              $disc        = floatval($r['discretionary_amount']);
+              $total       = $calc + $disc;
+              $managerName = $r['manager_first'] ? $r['manager_first'] . ' ' . $r['manager_last'] : '—';
             ?>
             <tr class="<?php echo !$r['is_eligible'] ? 'ineligible' : ''; ?>"
                 data-rating="<?php echo $r['performance_rating']; ?>"
@@ -429,10 +413,10 @@ $grandTotal    = $totalCalc + $totalDisc;
                 data-disc="<?php echo $disc; ?>"
                 data-total="<?php echo $total; ?>">
               <td><?php echo htmlspecialchars($r['first_name'] . ' ' . $r['last_name']); ?></td>
-              <td><span class="role-badge <?php echo htmlspecialchars($r['role']); ?>"><?php echo htmlspecialchars($r['role']); ?></span></td>
               <td><?php echo htmlspecialchars($managerName); ?></td>
-              <td><?php echo htmlspecialchars($directorName); ?></td>
+              <td><?php echo htmlspecialchars($r['title'] ?? '—'); ?></td>
               <td><?php echo htmlspecialchars($r['organization_name'] ?? '—'); ?></td>
+              <td><span class="pay-band-badge"><?php echo htmlspecialchars($r['pay_band'] ?? '—'); ?></span></td>
               <td>
                 <?php if ($r['is_eligible']): ?>
                 <div class="rating-bar">
@@ -483,6 +467,19 @@ $grandTotal    = $totalCalc + $totalDisc;
       </div>
     </div>
   </form>
+
+  <?php if (!$is_finalized): ?>
+  <div class="finalize-section">
+    <div class="finalize-text">
+      <h3>Ready to finalize?</h3>
+      <p>Once finalized, all award amounts are locked and sent to payroll. This action cannot be undone without sysadmin access.</p>
+    </div>
+    <form method="POST" onsubmit="return confirmFinalize()">
+      <input type="hidden" name="action" value="finalize">
+      <button type="submit" class="btn-finalize">✓ Finalize &amp; Send to Payroll</button>
+    </form>
+  </div>
+  <?php endif; ?>
 
 </div>
 
