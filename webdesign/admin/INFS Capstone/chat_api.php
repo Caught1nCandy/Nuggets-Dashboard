@@ -193,6 +193,9 @@ curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$answer, &$b
         if (!$data) continue;
         $content = $data['choices'][0]['delta']['content'] ?? null;
         if ($content !== null) {
+            if (empty($answer)) {
+        error_log("FIRST CONTENT CHUNK: " . $content);
+    }
             $answer .= $content;
         }
         if ($content === null) {
