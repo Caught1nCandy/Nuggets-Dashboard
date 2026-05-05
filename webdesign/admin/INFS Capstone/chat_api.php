@@ -205,6 +205,14 @@ curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
+// Strip Gemini internal tags and clean up the response
+$answer = preg_replace('/<final>.*?<\/final>/s', '', $answer);
+$answer = preg_replace('/<think>.*?<\/think>/s', '', $answer);
+$answer = preg_replace('/<[a-z]+>/i', '', $answer);
+$answer = preg_replace('/<\/[a-z]+>/i', '', $answer);
+$answer = trim($answer);
+error_log("RAW ANSWER: " . $answer);
+
 if ($httpCode !== 200 || empty($answer)) {
     http_response_code(502);
     echo json_encode(['error' => 'Could not reach AI. Please try again.']);
